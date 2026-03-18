@@ -1,0 +1,6 @@
+# Build outputs
+build/
+*.o
+
+# Model outputs
+*.crf
