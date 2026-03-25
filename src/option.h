@@ -14,7 +14,8 @@ using float_t = double;
 
 enum class RunMode {
     FIT,
-    LABEL
+    LABEL,
+    REPL
 };
 
 enum class OptimizerType {
@@ -189,6 +190,13 @@ public:
                     return false;
                 }
                 break;
+
+            case RunMode::REPL:
+                if (model_file.empty()) {
+                    error_msg = "Model file is required for REPL";
+                    return false;
+                }
+                break;
         }
         
         if (optimizer_spec_) {
@@ -275,6 +283,9 @@ private:
             return true;
         } else if (mode_str == "l" || mode_str == "label") {
             mode = RunMode::LABEL;
+            return true;
+        } else if (mode_str == "r" || mode_str == "repl") {
+            mode = RunMode::REPL;
             return true;
         } else {
             error_msg = "Unknown mode: " + mode_str;
