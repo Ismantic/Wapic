@@ -2,5 +2,6 @@
 build/
 *.o
 
-# Model outputs
+# Model outputs (allow data/*.crf)
 *.crf
+!data/*.crf
