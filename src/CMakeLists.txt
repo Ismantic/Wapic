@@ -11,8 +11,8 @@ set(SRCS
     progress.cc
 )
 
-add_library(wapix_lib ${SRCS})
-target_include_directories(wapix_lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+add_library(wapic_lib ${SRCS})
+target_include_directories(wapic_lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
-add_executable(wapix main.cc)
-target_link_libraries(wapix PRIVATE wapix_lib)
+add_executable(wapic main.cc)
+target_link_libraries(wapic PRIVATE wapic_lib)

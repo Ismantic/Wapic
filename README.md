@@ -1,4 +1,4 @@
-# Wapix
+# Wapic
 
 基于 [Wapiti](https://wapiti.limsi.fr/) 的 C++ 重构实现，支持 SGD-L1 和 L-BFGS (OWL-QN) 两种优化算法的条件随机场 (CRF) 序列标注工具。附带基于 1998 年人民日报语料训练的中文分词模型。
 
@@ -36,7 +36,7 @@ cmake --build build
 ### 训练
 
 ```bash
-./build/src/wapix train \
+./build/src/wapic train \
     -p patterns.txt \
     -a l-bfgs \
     -1 0.5 -2 0.0001 \
@@ -47,7 +47,7 @@ cmake --build build
 ### 推理
 
 ```bash
-./build/src/wapix label \
+./build/src/wapic label \
     -m model.crf \
     test.txt result.txt
 ```
@@ -55,7 +55,7 @@ cmake --build build
 ### 交互式分词 (REPL)
 
 ```bash
-./build/src/wapix repl -m data/model_v2.crf
+./build/src/wapic repl -m data/model_v2.crf
 ```
 
 ```
@@ -173,7 +173,7 @@ B
 python3 scripts/prepare_data.py
 
 # 2. 训练
-./build/src/wapix train \
+./build/src/wapic train \
     -p data/pattern.txt \
     -a l-bfgs \
     -1 0.5 -2 0.0001 \
@@ -181,7 +181,7 @@ python3 scripts/prepare_data.py
     data/train.txt data/model_v2.crf
 
 # 3. 评估
-./build/src/wapix label \
+./build/src/wapic label \
     -m data/model_v2.crf \
     data/test_nolabel.txt data/test_result.txt
 python3 scripts/evaluate.py
