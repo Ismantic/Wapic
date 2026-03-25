@@ -1,6 +1,6 @@
-# IsmaWapiti
+# Wapix
 
-条件随机场 (CRF) 序列标注的 C++ 实现，支持 SGD-L1 和 L-BFGS (OWL-QN) 两种优化算法。
+基于 [Wapiti](https://wapiti.limsi.fr/) 的 C++ 重构实现，支持 SGD-L1 和 L-BFGS (OWL-QN) 两种优化算法的条件随机场 (CRF) 序列标注工具。附带基于 1998 年人民日报语料训练的中文分词模型。
 
 ## 特性
 
@@ -36,7 +36,7 @@ cmake --build build
 ### 训练
 
 ```bash
-./build/src/isma_wapiti_test train \
+./build/src/wapix train \
     -p patterns.txt \
     -a l-bfgs \
     -1 0.5 -2 0.0001 \
@@ -47,9 +47,24 @@ cmake --build build
 ### 推理
 
 ```bash
-./build/src/isma_wapiti_test label \
+./build/src/wapix label \
     -m model.crf \
     test.txt result.txt
+```
+
+### 交互式分词 (REPL)
+
+```bash
+./build/src/wapix repl -m data/model_v2.crf
+```
+
+```
+Loading model... done.
+IsmaWapiti REPL. Type Chinese text, press Enter. Ctrl+D to quit.
+>>> 中华人民共和国是一个伟大的国家
+中华人民共和国 是 一个 伟大 的 国家
+>>> 北京大学和清华大学是中国最好的两所高校
+北京大学 和 清华大学 是 中国 最 好 的 两 所 高校
 ```
 
 ### 命令行参数
@@ -99,6 +114,79 @@ U02:%x[1,0]
 B
 ```
 
+## 中文分词模型
+
+仓库附带一个预训练的 CRF 中文分词模型 (`data/model_v2.crf`)。
+
+### 训练数据
+
+1998 年人民日报标注语料（`data/1998-*.txt`），JSON 格式，包含原文和分词标注。
+
+- 训练集：1998 年 1-5 月，约 10.3 万句
+- 测试集：1998 年 6 月，约 2.1 万句
+
+### 标注方案
+
+采用 **BMES** 四标签字级标注：
+
+| 标签 | 含义 | 示例 |
+|------|------|------|
+| B | 词首字 | **中**华 |
+| M | 词中字 | 中**华**人民共**和** |
+| E | 词尾字 | 中华人民共和**国** |
+| S | 单字词 | **的**、**是** |
+
+使用 `scripts/prepare_data.py` 将 JSON 语料转换为 CRF 训练格式（每字一行，空行分句）。
+
+### 特征模板
+
+模板文件 `data/pattern.txt`，共 11 个特征：
+
+| 模板 | 含义 |
+|------|------|
+| U00-U04 | 当前字 ±2 窗口内的单字特征 |
+| U05 | 前字 + 当前字 |
+| U06 | 当前字 + 后字 |
+| U07 | 前第2字 + 前字 |
+| U08 | 后字 + 后第2字 |
+| U09 | 前字 + 后字（跳字特征） |
+| B | 标签转移特征 |
+
+### 模型效果
+
+使用 L-BFGS 优化器训练，L1=0.5, L2=0.0001，79 轮收敛。
+
+在 1998 年 6 月测试集上的评估结果：
+
+| 指标 | 数值 |
+|------|------|
+| Token 准确率 | 97.69% |
+| 词级 Precision | 97.33% |
+| 词级 Recall | 97.14% |
+| **词级 F1** | **97.24%** |
+| 模型大小 | 80 MB |
+
+### 复现训练
+
+```bash
+# 1. 预处理语料
+python3 scripts/prepare_data.py
+
+# 2. 训练
+./build/src/wapix train \
+    -p data/pattern.txt \
+    -a l-bfgs \
+    -1 0.5 -2 0.0001 \
+    -i 100 \
+    data/train.txt data/model_v2.crf
+
+# 3. 评估
+./build/src/wapix label \
+    -m data/model_v2.crf \
+    data/test_nolabel.txt data/test_result.txt
+python3 scripts/evaluate.py
+```
+
 ## 项目结构
 
 ```
@@ -114,6 +202,15 @@ src/
   trie.h/cc           - Binary Trie
   sentence.h          - 句子数据结构
   misc.h/cc           - 工具函数
+data/
+  1998-*.txt          - 人民日报标注语料
+  pattern.txt         - 特征模板
+  model_v2.crf        - 预训练分词模型
+scripts/
+  prepare_data.py     - 语料预处理（JSON → BMES）
+  evaluate.py         - 分词评估（P/R/F1）
+  analyze_model.py    - 模型大小分析
+  repl.py             - Python 版 REPL（已由 C++ REPL 替代）
 docs/
   Wapiti.md           - CRF 算法原理详解
 ```
