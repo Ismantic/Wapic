@@ -1,6 +1,6 @@
 # Wapic
 
-基于 [Wapiti](https://wapiti.limsi.fr/) 的 C++ 重构实现，支持 SGD-L1 和 L-BFGS (OWL-QN) 两种优化算法的条件随机场 (CRF) 序列标注工具。附带基于 1998 年人民日报语料训练的中文分词模型。
+基于 [Wapiti](https://wapiti.limsi.fr/) 的 C++ 重构实现，支持 SGD-L1 和 L-BFGS (OWL-QN) 两种优化算法的条件随机场 (CRF) 序列标注工具。附带基于 1998 年人民日报语料训练的中文分词模型。(还需要更多更好的中文分词语料）
 
 ## 特性
 
