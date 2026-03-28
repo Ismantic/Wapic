@@ -46,15 +46,18 @@ int64_t Trie::Insert(const std::string& value) {
     const std::string& t = e->value;
 
     size_t pos = 0;
-    for (; pos < value.length(); pos++) {
+    const size_t shared = std::min(value.length(), t.length());
+    for (; pos < shared; pos++) {
         if (value[pos] != t[pos]) break;
     }
 
     uint8_t byte;
-    if (pos != value.length()) { //  Prefix of v 
+    if (pos < value.length() && pos < t.length()) {
         byte = value[pos] ^ t[pos];
     } else if (pos < t.length()) { // v is Prefix of t
         byte = t[pos];
+    } else if (pos < value.length()) { // t is Prefix of v
+        byte = value[pos];
     } else { // v == t
         return e->i;
     }

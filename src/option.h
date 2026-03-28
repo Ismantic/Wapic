@@ -77,10 +77,8 @@ public:
     std::string output_file;
     std::string pattern_file;
     std::string model_file;
-    std::string test_file;
 
     uint32_t max_iterations;
-    uint32_t num_cores;
 
     float_t L1;
     float_t L2;
@@ -97,7 +95,6 @@ public:
     : run_mode(RunMode::FIT)
     , optimizer_type(OptimizerType::LBFGS)
     , max_iterations(100)
-    , num_cores(1)
     , L1(0.5)
     , L2(0.0001)
     , objective_window(5)
@@ -139,10 +136,6 @@ public:
     }
 
     bool Validate(std::string& error_msg) const {
-        if (num_cores == 0) {
-            error_msg = "Number of threads must be positive";
-            return false;
-        }
         if (L1 < 0.0) {
             error_msg = "L1 penalty must be non-negative";
             return false;
@@ -178,6 +171,10 @@ public:
                     error_msg = "Pattern file is required for training";
                     return false;
                 }
+                if (!model_file.empty()) {
+                    error_msg = "Training resume via --model is not implemented";
+                    return false;
+                }
                 break;
                 
             case RunMode::LABEL:
@@ -187,6 +184,10 @@ public:
                 }
                 if (model_file.empty()) {
                     error_msg = "Model file is required for labeling";
+                    return false;
+                }
+                if (output_file.empty()) {
+                    error_msg = "Output file is required for labeling";
                     return false;
                 }
                 break;
@@ -249,9 +250,6 @@ public:
             "TRAIN MODE:\n"
             "    -a, --algo ALGORITHM    Optimizer: sgd-l1, l-bfgs (default: l-bfgs)\n"
             "    -p, --pattern FILE      Pattern file for feature extraction\n"
-            "    -m, --model FILE        Pre-trained model to continue training\n"
-            "    -d, --devel FILE        Development dataset\n"
-            "    -t, --threads INT       Number of threads (default: 1)\n"
             "    -i, --maxiter INT       Maximum iterations (default: 100)\n"
             "    -1, --rho1 FLOAT        L1 penalty (default: 0.5)\n"
             "    -2, --rho2 FLOAT        L2 penalty (default: 0.0001)\n"
@@ -347,20 +345,6 @@ private:
                         return false;
                     }
                     option.model_file = argv[i];
-                }
-                else if (arg == "-d" || arg == "--devel") {
-                    if (++i >= argc) {
-                        error_msg = "Missing development file";
-                        return false;
-                    }
-                    option.test_file = argv[i];
-                }
-                else if (arg == "-t" || arg == "--threads") {
-                    if (++i >= argc) {
-                        error_msg = "Missing thread count";
-                        return false;
-                    }
-                    option.num_cores = std::stoul(argv[i]);
                 }
                 else if (arg == "-i" || arg == "--maxiter") {
                     if (++i >= argc) {
