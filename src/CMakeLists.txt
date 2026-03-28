@@ -3,12 +3,10 @@ set(SRCS
     misc.cc
     trie.cc
     data.cc
-    option.cc
     model.cc
     state.cc
     score.cc
     optimize.cc
-    progress.cc
 )
 
 add_library(wapic_lib ${SRCS})

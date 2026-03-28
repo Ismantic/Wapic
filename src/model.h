@@ -18,7 +18,6 @@ private:
     // Data
     std::unique_ptr<DataProcessor> processor_;
     std::unique_ptr<Dataset> data_;
-    std::unique_ptr<Dataset> test_data_;
 
     // Size
     int64_t label_count_; // Y 
@@ -41,14 +40,8 @@ public:
         data_ = std::unique_ptr<Dataset>(processor_->LoadDataset(file, true));
     }
 
-    void LoadTestData(const std::string& filename) {
-        std::ifstream file(filename);
-        test_data_ = std::unique_ptr<Dataset>(processor_->LoadDataset(file, true));
-    }
-
     const DataProcessor* GetDataProcessor() const { return processor_.get(); }
     const Dataset* GetData() const { return data_.get(); }
-    const Dataset* GetTestData() const { return test_data_.get(); }
 
     int64_t LabelCount() const { return label_count_; }
     int64_t ObservationCount() const { return observation_count_; }
@@ -91,7 +84,6 @@ public:
     Model(std::unique_ptr<DataProcessor> processor = nullptr)
         : processor_(std::move(processor))
         , data_(nullptr)
-        , test_data_(nullptr)
         , label_count_(0)
         , observation_count_(0)
         , feature_count_(0)

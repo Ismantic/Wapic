@@ -191,14 +191,14 @@ python3 scripts/evaluate.py
 
 ```
 src/
-  option.h/cc         - 命令行参数解析
+  option.h            - 命令行参数解析
   model.h/cc          - 模型容器（权重、偏移量、序列化）
   data.h/cc           - 数据加载、特征索引构建
   pattern.h/cc        - 特征模板解析与匹配
   state.h/cc          - Forward-Backward、梯度计算
   score.h/cc          - Viterbi 解码
   optimize.h/cc       - SGD-L1 和 L-BFGS 优化器
-  progress.h/cc       - 训练进度监控与收敛检测
+  progress.h          - 训练进度监控与收敛检测
   trie.h/cc           - Binary Trie
   sentence.h          - 句子数据结构
   misc.h/cc           - 工具函数
@@ -210,7 +210,6 @@ scripts/
   prepare_data.py     - 语料预处理（JSON → BMES）
   evaluate.py         - 分词评估（P/R/F1）
   analyze_model.py    - 模型大小分析
-  repl.py             - Python 版 REPL（已由 C++ REPL 替代）
 docs/
   Wapiti.md           - CRF 算法原理详解
 ```

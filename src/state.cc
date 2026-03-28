@@ -13,6 +13,13 @@ float_t NormalizeVector(float_t* v, uint32_t size) {
     for (uint32_t i = 0; i < size; ++i) {
         sum += v[i];
     }
+    if (!(sum > 0.0) || !std::isfinite(sum)) {
+        const float_t uniform = 1.0 / static_cast<float_t>(size);
+        for (uint32_t i = 0; i < size; ++i) {
+            v[i] = uniform;
+        }
+        return 1.0;
+    }
     float_t scale = 1.0/sum;
     for (uint32_t i = 0; i < size; ++i) {
         v[i] *= scale;
@@ -135,6 +142,9 @@ void GradientState::ComputeFowardBackward(const Sentence& sen) {
         // Z = Σ(alpha[t][y] * beta[t][y])
         for (int64_t y = 0; y < Y; ++y) {
             z += alpha_[t*Y + y] * beta_[t*Y + y];
+        }
+        if (!(z > 0.0) || !std::isfinite(z)) {
+            z = 1.0;
         }
 
         unorm_[t] = 1.0/z;

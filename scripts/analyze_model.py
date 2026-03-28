@@ -1,13 +1,18 @@
 #!/usr/bin/env python3
 """Analyze model file to understand size breakdown."""
 import collections
+import os
+import sys
 
 counts = collections.Counter()
 sizes = collections.Counter()
 
-with open('data/model.crf', 'r') as f:
+model_path = sys.argv[1] if len(sys.argv) > 1 else os.path.join('data', 'model_v2.crf')
+
+with open(model_path, 'r') as f:
     first = f.readline()  # #Patterns#11#1
-    for _ in range(11):
+    pattern_count = int(first.split('#Patterns#', 1)[1].split('#', 1)[0])
+    for _ in range(pattern_count):
         f.readline()
 
     # Label trie
