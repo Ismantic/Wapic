@@ -2,7 +2,7 @@ PYTHON = python3
 WAPIC = ../build/wapic
 DATA = ../data
 PATTERN = $(DATA)/pattern.txt
-MODEL = $(DATA)/model_v2.crf
+MODEL = $(DATA)/cut.wac
 
 # Training params
 ALGO = l-bfgs
@@ -22,7 +22,7 @@ $(DATA)/train.txt $(DATA)/test.txt: $(DATA)/1998-01.txt
 fit: $(MODEL)
 
 $(MODEL): $(DATA)/train.txt $(PATTERN)
-	$(WAPIC) train \
+	$(WAPIC) fit \
 		-p $(PATTERN) \
 		-a $(ALGO) \
 		-i $(MAXITER) \
@@ -34,7 +34,7 @@ $(MODEL): $(DATA)/train.txt $(PATTERN)
 test: $(DATA)/test_result.txt
 
 $(DATA)/test_result.txt: $(MODEL) $(DATA)/test_nolabel.txt
-	$(WAPIC) label \
+	$(WAPIC) test \
 		-m $(MODEL) \
 		$(DATA)/test_nolabel.txt $(DATA)/test_result.txt
 

@@ -91,7 +91,7 @@ int main(int argc, char* argv[]) {
             const wati::DataProcessor* processor = model.GetDataProcessor();
             wati::Scorer scorer(&model);
 
-            std::cerr << "IsmaWapiti REPL. Type Chinese text, press Enter. Ctrl+D to quit.\n";
+            std::cerr << "Type Chinese text, press Enter. Ctrl+D to quit.\n";
             std::string line;
             while (true) {
                 std::cerr << ">>> " << std::flush;

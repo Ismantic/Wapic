@@ -212,7 +212,7 @@ public:
     static bool Parse(int argc, char* argv[], Option& option, std::string& error_msg) {
         if (argc < 2) {
             PrintHelp(argv[0]);
-            error_msg = "No mode specified";
+            error_msg = "No arguments specified";
             return false;
         }
 
@@ -222,15 +222,20 @@ public:
             std::exit(0);
         }
 
+        // Try parsing first arg as mode; if not a mode, default to REPL
+        int opts_start;
+        if (first_arg == "fit" || first_arg == "test") {
+            ParseMode(first_arg, option.run_mode, error_msg);
+            opts_start = 2;
+        } else {
+            option.run_mode = RunMode::REPL;
+            opts_start = 1;
+        }
 
-        if (!ParseMode(first_arg, option.run_mode, error_msg)) {
+        if (!ParseOptions(argc - opts_start, argv + opts_start, option, error_msg)) {
             return false;
         }
-        
-        if (!ParseOptions(argc - 2, argv + 2, option, error_msg)) {
-            return false;
-        }
-        
+
         return option.Validate(error_msg);
     }
 
@@ -241,13 +246,13 @@ public:
             "    " << program_name << " <mode> [options] [input] [output]\n\n"
             
             "MODES:\n"
-            "    train       Train a CRF model\n"
-            "    label       Label sequences using trained model\n"
+            "    fit         Train a CRF model\n"
+            "    test        Label sequences using trained model\n"
             
             "GLOBAL OPTIONS:\n"
             "    -h, --help              Show this help message\n"
             
-            "TRAIN MODE:\n"
+            "FIT MODE:\n"
             "    -a, --algo ALGORITHM    Optimizer: sgd-l1, l-bfgs (default: l-bfgs)\n"
             "    -p, --pattern FILE      Pattern file for feature extraction\n"
             "    -i, --maxiter INT       Maximum iterations (default: 100)\n"
@@ -265,25 +270,21 @@ public:
             "    --histsz INT            History size (default: 5)\n"
             "    --maxls INT             Max line search (default: 40)\n\n"
             
-            "LABEL MODE:\n"
+            "TEST MODE:\n"
             "    -m, --model FILE        Model file to load\n"
             
             "EXAMPLES:\n"
-            "    # Train a model\n"
-            "    " << program_name << " train -p patterns.txt -a l-bfgs train.txt model.crf\n\n"
-            "    # Label new data\n"
-            "    " << program_name << " label -m model.crf test.txt result.txt\n\n";
+            "    " << program_name << " fit -p patterns.txt -a l-bfgs train.txt model.wac\n"
+            "    " << program_name << " test -m model.wac test.txt result.txt\n"
+            "    " << program_name << " -m model.wac\n\n";
     }
 private:
     static bool ParseMode(const std::string& mode_str, RunMode& mode, std::string& error_msg) {
-        if (mode_str == "t" || mode_str == "train") {
+        if (mode_str == "fit") {
             mode = RunMode::FIT;
             return true;
-        } else if (mode_str == "l" || mode_str == "label") {
+        } else if (mode_str == "test") {
             mode = RunMode::LABEL;
-            return true;
-        } else if (mode_str == "r" || mode_str == "repl") {
-            mode = RunMode::REPL;
             return true;
         } else {
             error_msg = "Unknown mode: " + mode_str;
