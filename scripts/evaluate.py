@@ -2,6 +2,7 @@
 """Evaluate CRF segmentation: compare predicted BMES tags with gold tags,
 and show sample segmentation results."""
 
+import os
 import sys
 
 
@@ -142,4 +143,6 @@ def evaluate(gold_file, pred_file, n_samples=10):
 
 
 if __name__ == '__main__':
-    evaluate('data/test.txt', 'data/test_result.txt')
+    data_dir = os.path.join(os.path.dirname(__file__), '..', 'data')
+    evaluate(os.path.join(data_dir, 'test.txt'),
+             os.path.join(data_dir, 'test_result.txt'))
