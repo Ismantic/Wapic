@@ -74,7 +74,7 @@ def main():
 
     # Use refined version for 01, original for others
     train_files = [
-        os.path.join(data_dir, '1998-01-refined.txt'),
+        os.path.join(data_dir, '1998-01.txt'),
         os.path.join(data_dir, '1998-02.txt'),
         os.path.join(data_dir, '1998-03.txt'),
         os.path.join(data_dir, '1998-04.txt'),
