@@ -5,3 +5,4 @@ build/
 # Model outputs (allow data/*.crf)
 *.crf
 !data/*.crf
+Wapiti.md

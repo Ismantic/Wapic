@@ -25,7 +25,7 @@ make           # 以上全部
 ## 交互式分词
 
 ```bash
-./build/wapic repl -m data/model_v2.crf
+./build/wapic repl -m data/cut.wac
 ```
 
 ```
