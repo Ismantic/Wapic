@@ -91,7 +91,7 @@ void SGDOptimizer::Optimize() {
 }
 
 void LBFGSOptimizer::Optimize() {
-    GradientComputer* G = new GradientComputer(model_, g);
+    GradientComputer* G = new GradientComputer(model_, g, nthread_);
     float_t fx = G->RunGradientComputation(r1, r2);
 
     Progresser p(model_, window_size, stopeps);
