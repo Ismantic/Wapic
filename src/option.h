@@ -5,6 +5,7 @@
 #include <stdexcept>
 #include <limits>
 #include <memory>
+#include <thread>
 
 #include <stdint.h>
 
@@ -79,6 +80,7 @@ public:
     std::string model_file;
 
     uint32_t max_iterations;
+    uint32_t nthread;
 
     float_t L1;
     float_t L2;
@@ -95,6 +97,7 @@ public:
     : run_mode(RunMode::FIT)
     , optimizer_type(OptimizerType::LBFGS)
     , max_iterations(100)
+    , nthread(std::max(1u, std::thread::hardware_concurrency() / 2))
     , L1(0.5)
     , L2(0.0001)
     , objective_window(5)
@@ -260,7 +263,8 @@ public:
             "    -2, --rho2 FLOAT        L2 penalty (default: 0.0001)\n"
             "    -o, --objwin INT        Objective window (default: 5)\n"
             "    -w, --stopwin INT       Stop window (default: 5)\n"
-            "    -e, --stopeps FLOAT     Stop epsilon (default: 0.02)\n\n"
+            "    -e, --stopeps FLOAT     Stop epsilon (default: 0.02)\n"
+            "    -t, --nthread INT       Number of threads (default: auto)\n\n"
             
             "SGD-L1 OPTIONS:\n"
             "    --eta0 FLOAT            Learning rate (default: 0.8)\n"
@@ -409,6 +413,15 @@ private:
                     }
                 }
                 
+                else if (arg == "-t" || arg == "--nthread") {
+                    if (++i >= argc) {
+                        error_msg = "Missing thread count";
+                        return false;
+                    }
+                    option.nthread = std::stoul(argv[i]);
+                    if (option.nthread == 0) option.nthread = 1;
+                }
+
                 else if (arg == "--histsz") {
                     if (++i >= argc) {
                         error_msg = "Missing history size";

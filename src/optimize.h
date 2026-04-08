@@ -58,11 +58,12 @@ private:
 class LBFGSOptimizer {
 public:
     LBFGSOptimizer(Model* model, uint32_t window_size, float_t stopeps,
-                   uint32_t max_iter, size_t objective_window_size, 
-                   size_t history_size, size_t max_line_search, float_t r1, float_t r2)
+                   uint32_t max_iter, size_t objective_window_size,
+                   size_t history_size, size_t max_line_search, float_t r1, float_t r2,
+                   uint32_t nthread = 1)
         : model_(model), window_size(window_size), stopeps(stopeps), F(model_->FeatureCount())
         , K(max_iter), C(objective_window_size), M(history_size), L(max_line_search)
-        , r1(r1), r2(r2), L1(r1 != 0.0), x(model_->GetWeights()) {
+        , r1(r1), r2(r2), L1(r1 != 0.0), nthread_(nthread), x(model_->GetWeights()) {
         Init();
     }
 
@@ -80,6 +81,7 @@ private:
     const float_t r1;
     const float_t r2;
     const bool L1;
+    const uint32_t nthread_;
 
     std::vector<float_t>& x;  // Current values (Points to Model->theta)
     std::vector<float_t>  g;  // Current gradient

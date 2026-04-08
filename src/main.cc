@@ -62,7 +62,8 @@ int main(int argc, char* argv[]) {
                                        option.objective_window,
                                        option.GetOptimizerSpec<wati::LBFGS>()->history_size,
                                        option.GetOptimizerSpec<wati::LBFGS>()->max_line_search,
-                                       option.L1, option.L2);
+                                       option.L1, option.L2,
+                                       option.nthread);
                 s.Optimize();
             }
 

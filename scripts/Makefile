@@ -9,6 +9,8 @@ ALGO = l-bfgs
 MAXITER = 100
 L1 = 0.5
 L2 = 0.0001
+NTHREAD = $(shell nproc 2>/dev/null || echo 1)
+NTHREAD := $(shell echo $$(( $(NTHREAD) / 2 > 0 ? $(NTHREAD) / 2 : 1 )))
 
 all: review
 
@@ -28,6 +30,7 @@ $(MODEL): $(DATA)/train.txt $(PATTERN)
 		-i $(MAXITER) \
 		-1 $(L1) \
 		-2 $(L2) \
+		-t $(NTHREAD) \
 		$(DATA)/train.txt $(MODEL)
 
 # Step 3: label test data
