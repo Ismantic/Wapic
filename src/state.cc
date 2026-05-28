@@ -63,7 +63,7 @@ void GradientState::ComputePsi(const Sentence& sen) {
         for (int64_t y = 0; y < Y; ++y) {
             float_t sum = 0.0;
             for (uint32_t n = 0; n < pos.unigram_count; ++n) {
-                const auto& w = model_->GetUnigramWeights(pos.unigram_obs[n]);
+                const auto& w = model_->GetUnigramWeights(sen.unigram_obs(t)[n]);
                 sum += w[y];
             }
             for (uint32_t yp = 0; yp < Y; ++yp) {
@@ -78,7 +78,7 @@ void GradientState::ComputePsi(const Sentence& sen) {
             for (int64_t y = 0; y < Y; ++y, ++d) {
                 float_t sum = 0.0;
                 for (uint32_t n = 0; n < pos.bigram_count; ++n) {
-                    const auto& w = model_->GetBigramWeights(pos.bigram_obs[n]);
+                    const auto& w = model_->GetBigramWeights(sen.bigram_obs(t)[n]);
                     sum += w[d];
                 }
                 psi_[(t*Y + yp)*Y + y] += sum;
@@ -159,7 +159,7 @@ void GradientState::ComputeModelExpectation(const Sentence& sen) {
             // P(y_t = y|x) = alpha[t][y] * beta[t][y] / Z
             float_t e = alpha_[t * Y + y] * beta_[t * Y + y] * unorm_[t];
             for (uint32_t n = 0; n < pos.unigram_count; ++n) {
-                const auto o = model_->GetUnigramIndex(pos.unigram_obs[n]);
+                const auto o = model_->GetUnigramIndex(sen.unigram_obs(t)[n]);
                 gradient_[o + y] += e;
             }
         }
@@ -176,7 +176,7 @@ void GradientState::ComputeModelExpectation(const Sentence& sen) {
                             psi_[(t * Y + yp) * Y + y] *
                             bnorm_[t];
                 for (uint32_t n = 0; n < pos.bigram_count; ++n) {
-                    auto o = model_->GetBigramIndex(pos.bigram_obs[n]);
+                    auto o = model_->GetBigramIndex(sen.bigram_obs(t)[n]);
                     gradient_[o + d] += e;
                 }
             }
@@ -194,7 +194,7 @@ void GradientState::SubtractEmpirical(const Sentence& sen) {
         const int64_t y = pos.label;
 
         for (uint32_t n = 0; n < pos.unigram_count; ++n) {
-            const auto& o = model_->GetUnigramIndex(pos.unigram_obs[n]);
+            const auto& o = model_->GetUnigramIndex(sen.unigram_obs(t)[n]);
             gradient_[o + y] += -1.0;
         }
     }
@@ -206,7 +206,7 @@ void GradientState::SubtractEmpirical(const Sentence& sen) {
         const int64_t d = yp*Y + y;
 
         for (uint32_t n = 0; n < pos.bigram_count; ++n) {
-            const auto& o = model_->GetBigramIndex(pos.bigram_obs[n]);
+            const auto& o = model_->GetBigramIndex(sen.bigram_obs(t)[n]);
             gradient_[o + d] += -1.0;
         }
     }
@@ -233,7 +233,7 @@ void GradientState::ComputeLogLoss(const Sentence& sen) {
         const int64_t y = pos.label;
 
         for (uint32_t n = 0; n < pos.unigram_count; ++n) {
-            const auto& w = model_->GetUnigramWeights(pos.unigram_obs[n]);
+            const auto& w = model_->GetUnigramWeights(sen.unigram_obs(t)[n]);
             pathscore += w[y];
         }
     }
@@ -245,7 +245,7 @@ void GradientState::ComputeLogLoss(const Sentence& sen) {
         const uint32_t d = yp * Y + y;
 
         for (uint32_t n = 0; n < pos.bigram_count; ++n) {
-            const auto&w = model_->GetBigramWeights(pos.bigram_obs[n]);
+            const auto&w = model_->GetBigramWeights(sen.bigram_obs(t)[n]);
             pathscore += w[d];
         }
     }

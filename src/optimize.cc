@@ -1,6 +1,8 @@
 #include "optimize.h"
 #include "progress.h"
 
+#include <omp.h>
+
 namespace wati {
 
 void InsertObservation(std::vector<int64_t>& obs, int64_t new_obs) {
@@ -21,10 +23,10 @@ std::vector<SGDOptimizer::Index> SGDOptimizer::GetIndex() {
             const Sentence::Pos* pos = &sen->pos[t];
 
             for (uint32_t p = 0; p < pos->unigram_count; p++) {
-                InsertObservation(uobs, pos->unigram_obs[p]);
+                InsertObservation(uobs, sen->unigram_obs(t)[p]);
             }
             for (uint32_t p = 0; p < pos->bigram_count; p++) {
-                InsertObservation(bobs, pos->bigram_obs[p]);
+                InsertObservation(bobs, sen->bigram_obs(t)[p]);
             }
         }
 
@@ -131,6 +133,7 @@ void LBFGSOptimizer::Optimize() {
 
 void LBFGSOptimizer::ComputePseudoGradient() {
     const float_t rho1 = r1;
+    #pragma omp parallel for schedule(static)
     for (int64_t f = 0; f < F; f++) {
         if (x[f] < 0.0)
             pg[f] = g[f] - rho1;
@@ -148,6 +151,7 @@ void LBFGSOptimizer::ComputePseudoGradient() {
 void LBFGSOptimizer::ComputeSearchDirection(uint32_t k) {
     // Compute initital search direction
     const float_t* grad_ptr = L1 ? pg.data() : g.data();
+    #pragma omp parallel for schedule(static)
     for (int64_t f = 0; f < F; f++) {
         d[f] = - grad_ptr[f];
     }
@@ -169,6 +173,7 @@ void LBFGSOptimizer::ComputeSearchDirection(uint32_t k) {
     // Scale the direction
     const float_t y2 = DotProduct(y[km], y[km]);
     const float_t v = 1.0 / (p[km] * y2);
+    #pragma omp parallel for schedule(static)
     for (int64_t f = 0; f < F; f++) {
         d[f] *= v;
     }
@@ -182,10 +187,11 @@ void LBFGSOptimizer::ComputeSearchDirection(uint32_t k) {
 }
 
 void LBFGSOptimizer::ConstrainSearchDirection() {
+    #pragma omp parallel for schedule(static)
     for (int64_t f = 0; f < F; f++) {
         if (d[f] * pg[f] >= 0.0) {
             d[f] = 0.0;
-        } 
+        }
     }
 }
 
@@ -197,6 +203,7 @@ bool LBFGSOptimizer::PerformLineSearch(uint32_t k, float_t& fx, GradientComputer
 
     for (uint32_t ls = 1; ; ls++, stp *= sc) {
         // Update position
+        #pragma omp parallel for schedule(static)
         for (int64_t f = 0; f < F; f++) {
             x[f] = xp[f] + stp * d[f];
         }
@@ -223,6 +230,7 @@ bool LBFGSOptimizer::PerformLineSearch(uint32_t k, float_t& fx, GradientComputer
 }
 
 void LBFGSOptimizer::ProjectToOrthant() {
+    #pragma omp parallel for schedule(static)
     for (int64_t f = 0; f < F; f++) {
         float_t o = xp[f];
         if (o == 0.0) {
@@ -257,6 +265,7 @@ bool LBFGSOptimizer::CheckWolfeConditions(float_t fx, float_t fi, float_t stp, f
 
 bool LBFGSOptimizer::CheckArmijoRule(float_t fx, float_t fi) {
     float_t vp = 0.0;
+    #pragma omp parallel for reduction(+:vp) schedule(static)
     for (int64_t f = 0; f < F; f++) {
         vp += (x[f] - xp[f]) * d[f];
     }
@@ -265,8 +274,9 @@ bool LBFGSOptimizer::CheckArmijoRule(float_t fx, float_t fi) {
 
 void LBFGSOptimizer::UpdateHistory(uint32_t k) {
     const uint32_t kn = (k + 1) % M;
-    
+
     // Update s_k = x_{k+1} - x_k
+    #pragma omp parallel for schedule(static)
     for (int64_t f = 0; f < F; f++) {
         s[kn][f] = x[f] - xp[f];
         y[kn][f] = g[f] - gp[f];
@@ -295,9 +305,10 @@ bool LBFGSOptimizer::CheckConvergence(uint32_t k, float_t fx) {
     return false;
 }
 
-// Helper functions for vector operations
+// Helper functions for vector operations (parallelized for large F)
 float_t LBFGSOptimizer::DotProduct(const std::vector<float_t>& a, const std::vector<float_t>& b) {
     float_t sum = 0.0;
+    #pragma omp parallel for reduction(+:sum) schedule(static)
     for (int64_t i = 0; i < F; i++) {
         sum += a[i] * b[i];
     }
@@ -305,6 +316,7 @@ float_t LBFGSOptimizer::DotProduct(const std::vector<float_t>& a, const std::vec
 }
 
 void LBFGSOptimizer::Axpy(float_t alpha, const std::vector<float_t>& x, std::vector<float_t>& y) {
+    #pragma omp parallel for schedule(static)
     for (int64_t i = 0; i < F; i++) {
         y[i] += alpha * x[i];
     }

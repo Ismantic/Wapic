@@ -16,7 +16,8 @@ using float_t = double;
 enum class RunMode {
     FIT,
     LABEL,
-    REPL
+    REPL,
+    BUILD
 };
 
 enum class OptimizerType {
@@ -78,6 +79,7 @@ public:
     std::string output_file;
     std::string pattern_file;
     std::string model_file;
+    bool from_binary = false;  // fit: load training data from binary cache
 
     uint32_t max_iterations;
     uint32_t nthread;
@@ -201,6 +203,21 @@ public:
                     return false;
                 }
                 break;
+
+            case RunMode::BUILD:
+                if (input_file.empty()) {
+                    error_msg = "Training input file is required";
+                    return false;
+                }
+                if (output_file.empty()) {
+                    error_msg = "Output binary prefix is required";
+                    return false;
+                }
+                if (pattern_file.empty()) {
+                    error_msg = "Pattern file is required for build";
+                    return false;
+                }
+                break;
         }
         
         if (optimizer_spec_) {
@@ -227,7 +244,7 @@ public:
 
         // Try parsing first arg as mode; if not a mode, default to REPL
         int opts_start;
-        if (first_arg == "fit" || first_arg == "test") {
+        if (first_arg == "fit" || first_arg == "test" || first_arg == "build") {
             ParseMode(first_arg, option.run_mode, error_msg);
             opts_start = 2;
         } else {
@@ -289,6 +306,9 @@ private:
             return true;
         } else if (mode_str == "test") {
             mode = RunMode::LABEL;
+            return true;
+        } else if (mode_str == "build") {
+            mode = RunMode::BUILD;
             return true;
         } else {
             error_msg = "Unknown mode: " + mode_str;
@@ -440,7 +460,10 @@ private:
                         lbfgs_config->max_line_search = std::stoul(argv[i]);
                     }
                 }
-                
+                else if (arg == "--from-bin") {
+                    option.from_binary = true;
+                }
+
                 else {
                     error_msg = "Unknown option: " + arg;
                     return false;

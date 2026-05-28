@@ -40,10 +40,25 @@ int main(int argc, char* argv[]) {
     }
 
     switch (option.run_mode) {
+        case wati::RunMode::BUILD: {
+            wati::DataProcessor processor;
+            processor.LoadPatterns(option.pattern_file);
+            std::ifstream in(option.input_file);
+            if (!in) {
+                std::cerr << "Cannot open input " << option.input_file << "\n";
+                return 1;
+            }
+            processor.BuildBinary(in, option.output_file);
+            break;
+        }
         case wati::RunMode::FIT: {
             wati::Model model(std::make_unique<wati::DataProcessor>());
             model.LoadPatterns(option.pattern_file);
-            model.LoadData(option.input_file);
+            if (option.from_binary) {
+                model.LoadDataBinary(option.input_file);
+            } else {
+                model.LoadData(option.input_file);
+            }
             model.Sync();
 
             if (option.optimizer_type == wati::OptimizerType::SGD) {

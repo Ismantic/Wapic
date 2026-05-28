@@ -29,6 +29,11 @@ public:
     void LoadPatterns(const std::string& filename);
     Dataset* LoadDataset(std::istream& file, bool e);
 
+    // Binary cache pipeline: parse text once, write 3 files (<prefix>.obs.bin /
+    // <prefix>.meta.bin / <prefix>.trie.txt). Later runs mmap them for fast load.
+    void BuildBinary(std::istream& file, const std::string& prefix);
+    Dataset* LoadBinary(const std::string& prefix);
+
     void LoadFeatures(std::istream& file);
     void SaveFeatures(std::ostream& file) const;
 

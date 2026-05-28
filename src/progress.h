@@ -111,9 +111,9 @@ public:
                 << "err=" << std::fixed << std::setprecision(2) 
                 << std::setw(5) << token_error << "%/" 
                 << std::setw(5) << sentence_error << "% "
-                << "time=" << std::fixed << std::setprecision(2) 
+                << "time=" << std::fixed << std::setprecision(2)
                 << iteration_time << "s/"
-                << total_time_ << "s\n";    
+                << total_time_ << "s" << std::endl;
     }
 
     bool ReportProgress(uint32_t iteration, float_t objective) {

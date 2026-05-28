@@ -33,7 +33,7 @@ void Scorer::ComputeUnigramScores(const Sentence& sen) {
         for (int64_t y = 0; y < Y; ++y) {
             float_t sum = 0.0;
             for (uint32_t n = 0; n < pos.unigram_count; ++n) {
-                const auto w = model_->GetUnigramWeights(pos.unigram_obs[n]);
+                const auto w = model_->GetUnigramWeights(sen.unigram_obs(t)[n]);
                 sum += w[y];
             }
             for (int64_t yp = 0; yp < Y; yp++) {
@@ -53,7 +53,7 @@ void Scorer::ComputeBigramScores(const Sentence& sen) {
             for (int64_t y = 0; y < Y; y++, d++) {
                 float_t sum = 0.0;
                 for (uint32_t n = 0; n < pos.bigram_count; n++) {
-                    const auto w = model_->GetBigramWeights(pos.bigram_obs[n]);
+                    const auto w = model_->GetBigramWeights(sen.bigram_obs(t)[n]);
                     sum += w[d];
                 }
                 psi_[t][yp][y] += sum;

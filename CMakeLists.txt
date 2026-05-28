@@ -20,7 +20,8 @@ add_library(wapic_lib ${SRCS})
 target_include_directories(wapic_lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 find_package(Threads REQUIRED)
-target_link_libraries(wapic_lib PUBLIC Threads::Threads)
+find_package(OpenMP REQUIRED)
+target_link_libraries(wapic_lib PUBLIC Threads::Threads OpenMP::OpenMP_CXX)
 
 add_executable(wapic src/main.cc)
 target_link_libraries(wapic PRIVATE wapic_lib)

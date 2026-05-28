@@ -40,6 +40,10 @@ public:
         data_ = std::unique_ptr<Dataset>(processor_->LoadDataset(file, true));
     }
 
+    void LoadDataBinary(const std::string& prefix) {
+        data_ = std::unique_ptr<Dataset>(processor_->LoadBinary(prefix));
+    }
+
     const DataProcessor* GetDataProcessor() const { return processor_.get(); }
     const Dataset* GetData() const { return data_.get(); }
 
