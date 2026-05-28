@@ -253,20 +253,25 @@ void DataProcessor::BuildBinary(std::istream& file, const std::string& prefix,
     uint64_t parsed_lines = 0;
     auto t_start = std::chrono::steady_clock::now();
 
-    // Worker that runs Pattern::Execute on a sentence; called from std::async.
-    auto process_one = [this](TokenStrs* tos) -> PatternedSentence {
-        PatternedSentence ps;
-        ps.T = tos->Size();
-        ps.obs.reserve(ps.T * patterns.size());
-        if (!tos->labels.empty()) ps.labels.reserve(ps.T);
-        for (uint32_t t = 0; t < ps.T; t++) {
-            for (Pattern* p : patterns) {
-                ps.obs.push_back(p->Execute(*tos, t));
+    // Worker batch: process N sentences at once to amortize thread overhead.
+    auto process_batch = [this](std::vector<TokenStrs*> batch) -> std::vector<PatternedSentence> {
+        std::vector<PatternedSentence> out;
+        out.reserve(batch.size());
+        for (TokenStrs* tos : batch) {
+            PatternedSentence ps;
+            ps.T = tos->Size();
+            ps.obs.reserve(ps.T * patterns.size());
+            if (!tos->labels.empty()) ps.labels.reserve(ps.T);
+            for (uint32_t t = 0; t < ps.T; t++) {
+                for (Pattern* p : patterns) {
+                    ps.obs.push_back(p->Execute(*tos, t));
+                }
+                if (!tos->labels.empty()) ps.labels.push_back(tos->labels[t]);
             }
-            if (!tos->labels.empty()) ps.labels.push_back(tos->labels[t]);
+            delete tos;
+            out.push_back(std::move(ps));
         }
-        delete tos;
-        return ps;
+        return out;
     };
 
     auto consume_one = [&](PatternedSentence&& ps) {
@@ -329,29 +334,33 @@ void DataProcessor::BuildBinary(std::istream& file, const std::string& prefix,
         }
     };
 
-    // Pipeline: keep a deque of in-flight std::future workers.
-    const size_t queue_depth = std::max(2u, nthread) * 4;
-    std::deque<std::future<PatternedSentence>> pending;
+    // Pipeline: each future processes a batch to amortize thread spawn overhead.
+    const size_t batch_size = 128;
+    const size_t queue_depth = std::max(2u, nthread) * 2;
+    std::deque<std::future<std::vector<PatternedSentence>>> pending;
 
+    auto launch = nthread <= 1 ? std::launch::deferred : std::launch::async;
     bool eof = false;
     while (!eof || !pending.empty()) {
         while (pending.size() < queue_depth && !eof) {
-            RawStrs* raw = ReadRawStrs(file);
-            if (!raw) { eof = true; break; }
-            TokenStrs* tos = RawToTokens(raw, true);
-            delete raw;
-            if (!tos || tos->Size() == 0) { delete tos; continue; }
-            if (nthread <= 1) {
-                // Serial fast path
-                pending.push_back(std::async(std::launch::deferred, process_one, tos));
-            } else {
-                pending.push_back(std::async(std::launch::async, process_one, tos));
+            std::vector<TokenStrs*> batch;
+            batch.reserve(batch_size);
+            while (batch.size() < batch_size && !eof) {
+                RawStrs* raw = ReadRawStrs(file);
+                if (!raw) { eof = true; break; }
+                TokenStrs* tos = RawToTokens(raw, true);
+                delete raw;
+                if (!tos || tos->Size() == 0) { delete tos; continue; }
+                batch.push_back(tos);
+            }
+            if (!batch.empty()) {
+                pending.push_back(std::async(launch, process_batch, std::move(batch)));
             }
         }
         if (!pending.empty()) {
-            PatternedSentence ps = pending.front().get();
+            std::vector<PatternedSentence> results = pending.front().get();
             pending.pop_front();
-            consume_one(std::move(ps));
+            for (auto& ps : results) consume_one(std::move(ps));
         }
     }
 
