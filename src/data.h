@@ -31,7 +31,9 @@ public:
 
     // Binary cache pipeline: parse text once, write 3 files (<prefix>.obs.bin /
     // <prefix>.meta.bin / <prefix>.trie.txt). Later runs mmap them for fast load.
-    void BuildBinary(std::istream& file, const std::string& prefix);
+    // nthread > 1 enables parallel pattern execution; trie insert stays serial.
+    void BuildBinary(std::istream& file, const std::string& prefix,
+                     uint32_t nthread = 1);
     Dataset* LoadBinary(const std::string& prefix);
 
     void LoadFeatures(std::istream& file);

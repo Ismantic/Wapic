@@ -6,6 +6,8 @@
 #include <chrono>
 #include <cstdint>
 #include <cstring>
+#include <deque>
+#include <future>
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/mman.h>
@@ -210,9 +212,22 @@ Dataset* DataProcessor::LoadDataset(std::istream& file, bool e) {
     return data;
 }
 
+namespace {
+
+// Per-sentence intermediate result from worker threads.
+struct PatternedSentence {
+    uint32_t T = 0;
+    std::vector<std::string> obs;     // size T * pattern_count, ordered by (t, pattern_idx)
+    std::vector<std::string> labels;  // size T (may be empty if no labels)
+};
+
+}  // namespace
+
 // Parse text once and write 3 sidecar files (obs.bin, meta.bin, trie.txt) so
 // future training runs can mmap them in seconds instead of reparsing.
-void DataProcessor::BuildBinary(std::istream& file, const std::string& prefix) {
+// With nthread>1, Pattern::Execute runs in parallel; Trie::Insert stays serial.
+void DataProcessor::BuildBinary(std::istream& file, const std::string& prefix,
+                                uint32_t nthread) {
     const std::string obs_path  = prefix + ".obs.bin";
     const std::string meta_path = prefix + ".meta.bin";
     const std::string trie_path = prefix + ".trie.txt";
@@ -238,20 +253,29 @@ void DataProcessor::BuildBinary(std::istream& file, const std::string& prefix) {
     uint64_t parsed_lines = 0;
     auto t_start = std::chrono::steady_clock::now();
 
-    while (!file.eof()) {
-        RawStrs* raw = ReadRawStrs(file);
-        if (!raw) break;
-        TokenStrs* tos = RawToTokens(raw, true);
-        delete raw;
-        if (!tos || tos->Size() == 0) {
-            delete tos;
-            continue;
+    // Worker that runs Pattern::Execute on a sentence; called from std::async.
+    auto process_one = [this](TokenStrs* tos) -> PatternedSentence {
+        PatternedSentence ps;
+        ps.T = tos->Size();
+        ps.obs.reserve(ps.T * patterns.size());
+        if (!tos->labels.empty()) ps.labels.reserve(ps.T);
+        for (uint32_t t = 0; t < ps.T; t++) {
+            for (Pattern* p : patterns) {
+                ps.obs.push_back(p->Execute(*tos, t));
+            }
+            if (!tos->labels.empty()) ps.labels.push_back(tos->labels[t]);
         }
+        delete tos;
+        return ps;
+    };
 
-        const uint32_t T = tos->Size();
+    auto consume_one = [&](PatternedSentence&& ps) {
+        if (ps.T == 0) return;
+        const uint32_t T = ps.T;
         std::vector<int32_t> sen_obs(T * stride, 0);
         std::vector<Sentence::Pos> sen_pos(T);
 
+        size_t obs_idx = 0;
         for (uint32_t t = 0; t < T; t++) {
             Sentence::Pos& pos = sen_pos[t];
             int32_t* unigram_start = sen_obs.data() + t * stride;
@@ -259,8 +283,8 @@ void DataProcessor::BuildBinary(std::istream& file, const std::string& prefix) {
             int32_t* unigram_current = unigram_start;
             int32_t* bigram_current  = bigram_start;
 
-            for (Pattern* pattern : patterns) {
-                std::string obs = pattern->Execute(*tos, t);
+            for (size_t pi = 0; pi < patterns.size(); pi++) {
+                const std::string& obs = ps.obs[obs_idx++];
                 int64_t i = observations->Insert(obs);
                 if (i == -1) continue;
                 switch (obs[0]) {
@@ -280,27 +304,21 @@ void DataProcessor::BuildBinary(std::istream& file, const std::string& prefix) {
                         break;
                 }
             }
-
-            if (!tos->labels.empty()) {
-                pos.label = static_cast<int32_t>(labels->Insert(tos->labels[t]));
+            if (!ps.labels.empty()) {
+                pos.label = static_cast<int32_t>(labels->Insert(ps.labels[t]));
             }
         }
 
-        // meta: pos_count u32, obs_offset u64, Pos[pos_count]
         uint32_t pos_count = T;
         uint64_t obs_off = obs_pos_count;
         meta_out.write(reinterpret_cast<const char*>(&pos_count), 4);
         meta_out.write(reinterpret_cast<const char*>(&obs_off), 8);
         meta_out.write(reinterpret_cast<const char*>(sen_pos.data()),
                        static_cast<std::streamsize>(pos_count * sizeof(Sentence::Pos)));
-
-        // obs: T*stride int32s
         obs_out.write(reinterpret_cast<const char*>(sen_obs.data()),
                       static_cast<std::streamsize>(sen_obs.size() * sizeof(int32_t)));
         obs_pos_count += sen_obs.size();
-
         sentence_count++;
-        delete tos;
 
         if ((++parsed_lines % 100000) == 0) {
             auto now = std::chrono::steady_clock::now();
@@ -309,16 +327,40 @@ void DataProcessor::BuildBinary(std::istream& file, const std::string& prefix) {
                       << static_cast<int64_t>(parsed_lines / std::max(dt, 1e-9))
                       << " sent/s)" << std::endl;
         }
+    };
+
+    // Pipeline: keep a deque of in-flight std::future workers.
+    const size_t queue_depth = std::max(2u, nthread) * 4;
+    std::deque<std::future<PatternedSentence>> pending;
+
+    bool eof = false;
+    while (!eof || !pending.empty()) {
+        while (pending.size() < queue_depth && !eof) {
+            RawStrs* raw = ReadRawStrs(file);
+            if (!raw) { eof = true; break; }
+            TokenStrs* tos = RawToTokens(raw, true);
+            delete raw;
+            if (!tos || tos->Size() == 0) { delete tos; continue; }
+            if (nthread <= 1) {
+                // Serial fast path
+                pending.push_back(std::async(std::launch::deferred, process_one, tos));
+            } else {
+                pending.push_back(std::async(std::launch::async, process_one, tos));
+            }
+        }
+        if (!pending.empty()) {
+            PatternedSentence ps = pending.front().get();
+            pending.pop_front();
+            consume_one(std::move(ps));
+        }
     }
 
     obs_out.close();
 
-    // Rewrite header with final count
     meta_out.seekp(0);
     meta_out.write(reinterpret_cast<const char*>(&sentence_count), 8);
     meta_out.close();
 
-    // Tries
     std::ofstream trie_out(trie_path);
     labels->Save(trie_out);
     observations->Save(trie_out);

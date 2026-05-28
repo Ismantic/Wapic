@@ -48,7 +48,7 @@ int main(int argc, char* argv[]) {
                 std::cerr << "Cannot open input " << option.input_file << "\n";
                 return 1;
             }
-            processor.BuildBinary(in, option.output_file);
+            processor.BuildBinary(in, option.output_file, option.nthread);
             break;
         }
         case wati::RunMode::FIT: {
