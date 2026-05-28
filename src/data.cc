@@ -253,26 +253,6 @@ void DataProcessor::BuildBinary(std::istream& file, const std::string& prefix,
     uint64_t parsed_lines = 0;
     auto t_start = std::chrono::steady_clock::now();
 
-    // Worker batch: process N sentences at once to amortize thread overhead.
-    auto process_batch = [this](std::vector<TokenStrs*> batch) -> std::vector<PatternedSentence> {
-        std::vector<PatternedSentence> out;
-        out.reserve(batch.size());
-        for (TokenStrs* tos : batch) {
-            PatternedSentence ps;
-            ps.T = tos->Size();
-            ps.obs.reserve(ps.T * patterns.size());
-            if (!tos->labels.empty()) ps.labels.reserve(ps.T);
-            for (uint32_t t = 0; t < ps.T; t++) {
-                for (Pattern* p : patterns) {
-                    ps.obs.push_back(p->Execute(*tos, t));
-                }
-                if (!tos->labels.empty()) ps.labels.push_back(tos->labels[t]);
-            }
-            delete tos;
-            out.push_back(std::move(ps));
-        }
-        return out;
-    };
 
     auto consume_one = [&](PatternedSentence&& ps) {
         if (ps.T == 0) return;
@@ -334,34 +314,55 @@ void DataProcessor::BuildBinary(std::istream& file, const std::string& prefix,
         }
     };
 
-    // Pipeline: each future processes a batch to amortize thread spawn overhead.
-    const size_t batch_size = 128;
-    const size_t queue_depth = std::max(2u, nthread) * 2;
-    std::deque<std::future<std::vector<PatternedSentence>>> pending;
+    // Main loop: read raw sentences only (no tokenize, no parse), then run
+    // RawToTokens + Pattern::Execute in parallel via OpenMP, then serially
+    // Trie-insert + write the results. Main does minimal serial work.
+    const size_t batch_size = 512;
+    std::vector<RawStrs*> batch;
+    batch.reserve(batch_size);
+    std::vector<PatternedSentence> results;
+    results.reserve(batch_size);
 
-    auto launch = nthread <= 1 ? std::launch::deferred : std::launch::async;
     bool eof = false;
-    while (!eof || !pending.empty()) {
-        while (pending.size() < queue_depth && !eof) {
-            std::vector<TokenStrs*> batch;
-            batch.reserve(batch_size);
-            while (batch.size() < batch_size && !eof) {
-                RawStrs* raw = ReadRawStrs(file);
-                if (!raw) { eof = true; break; }
-                TokenStrs* tos = RawToTokens(raw, true);
-                delete raw;
-                if (!tos || tos->Size() == 0) { delete tos; continue; }
-                batch.push_back(tos);
-            }
-            if (!batch.empty()) {
-                pending.push_back(std::async(launch, process_batch, std::move(batch)));
-            }
+    while (!eof) {
+        // Clean any leftover batch entries from prev iteration (defensive)
+        for (auto* r : batch) delete r;
+        batch.clear();
+        results.clear();
+        while (batch.size() < batch_size && !eof) {
+            RawStrs* raw = ReadRawStrs(file);
+            if (!raw) { eof = true; break; }
+            batch.push_back(raw);
         }
-        if (!pending.empty()) {
-            std::vector<PatternedSentence> results = pending.front().get();
-            pending.pop_front();
-            for (auto& ps : results) consume_one(std::move(ps));
+        if (batch.empty()) break;
+
+        results.resize(batch.size());
+        const int B = static_cast<int>(batch.size());
+        const int nt = std::max(1u, nthread);
+        #pragma omp parallel for schedule(static) num_threads(nt)
+        for (int i = 0; i < B; i++) {
+            RawStrs* raw = batch[i];
+            TokenStrs* tos = RawToTokens(raw, true);
+            delete raw;
+            batch[i] = nullptr;
+            if (!tos || tos->Size() == 0) {
+                delete tos;
+                continue;
+            }
+            PatternedSentence& ps = results[i];
+            ps.T = tos->Size();
+            ps.obs.reserve(ps.T * patterns.size());
+            if (!tos->labels.empty()) ps.labels.reserve(ps.T);
+            for (uint32_t t = 0; t < ps.T; t++) {
+                for (Pattern* p : patterns) {
+                    ps.obs.push_back(p->Execute(*tos, t));
+                }
+                if (!tos->labels.empty()) ps.labels.push_back(tos->labels[t]);
+            }
+            delete tos;
         }
+
+        for (auto& ps : results) consume_one(std::move(ps));
     }
 
     obs_out.close();
