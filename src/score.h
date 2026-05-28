@@ -36,7 +36,9 @@ private:
 public:
     explicit Scorer(const Model* model) : model_(model) {}
 
-    void Viterbi(const Sentence& sen, 
+    const Model* GetModel() const { return model_; }
+
+    void Viterbi(const Sentence& sen,
                  std::vector<int64_t>& labels, 
                  float_t* score = nullptr, 
                  std::vector<float_t>* path_scores = nullptr);

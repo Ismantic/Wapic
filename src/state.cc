@@ -57,33 +57,38 @@ void GradientState::CheckSize(uint32_t size) {
 void GradientState::ComputePsi(const Sentence& sen) {
     const size_t T = sen.Size();
     const int64_t Y = model_->LabelCount();
+    const int64_t YY = Y * Y;
 
+    // Unigram contribution: per-position score depends only on current label y,
+    // so accumulate once per t and broadcast to all yp slots.
+    float_t sumY[16];  // Y <= 16 (BMES = 4 in our case)
     for (size_t t = 0; t < T; ++t) {
         const Sentence::Pos& pos = sen.pos[t];
-        for (int64_t y = 0; y < Y; ++y) {
-            float_t sum = 0.0;
-            for (uint32_t n = 0; n < pos.unigram_count; ++n) {
-                const auto& w = model_->GetUnigramWeights(sen.unigram_obs(t)[n]);
-                sum += w[y];
-            }
-            for (uint32_t yp = 0; yp < Y; ++yp) {
-                psi_[(t*Y + yp)*Y + y] = sum;
-            }
+        const int32_t* uobs = sen.unigram_obs(t);
+        for (int64_t y = 0; y < Y; ++y) sumY[y] = 0.0;
+        for (uint32_t n = 0; n < pos.unigram_count; ++n) {
+            const float_t* w = model_->GetUnigramWeights(uobs[n]);
+            for (int64_t y = 0; y < Y; ++y) sumY[y] += w[y];
+        }
+        float_t* psi_t = psi_.data() + t * YY;
+        for (int64_t yp = 0; yp < Y; ++yp) {
+            float_t* row = psi_t + yp * Y;
+            for (int64_t y = 0; y < Y; ++y) row[y] = sumY[y];
         }
     }
 
+    // Bigram contribution: full Y*Y matrix per t.
+    float_t sumYY[256];  // Y*Y <= 256
     for (size_t t = 1; t < T; ++t) {
         const Sentence::Pos& pos = sen.pos[t];
-        for (int64_t yp = 0, d = 0; yp < Y; ++yp) {
-            for (int64_t y = 0; y < Y; ++y, ++d) {
-                float_t sum = 0.0;
-                for (uint32_t n = 0; n < pos.bigram_count; ++n) {
-                    const auto& w = model_->GetBigramWeights(sen.bigram_obs(t)[n]);
-                    sum += w[d];
-                }
-                psi_[(t*Y + yp)*Y + y] += sum;
-            }
+        const int32_t* bobs = sen.bigram_obs(t);
+        for (int64_t d = 0; d < YY; ++d) sumYY[d] = 0.0;
+        for (uint32_t n = 0; n < pos.bigram_count; ++n) {
+            const float_t* w = model_->GetBigramWeights(bobs[n]);
+            for (int64_t d = 0; d < YY; ++d) sumYY[d] += w[d];
         }
+        float_t* psi_t = psi_.data() + t * YY;
+        for (int64_t d = 0; d < YY; ++d) psi_t[d] += sumYY[d];
     }
 
     for (uint32_t i = 0; i < T*Y*Y; ++i) {
@@ -152,34 +157,41 @@ void GradientState::ComputeFowardBackward(const Sentence& sen) {
 void GradientState::ComputeModelExpectation(const Sentence& sen) {
     const size_t T = sen.Size();
     const int64_t Y = model_->LabelCount();
+    const int64_t YY = Y * Y;
 
+    // Unigram block: precompute e[y] per t, then write contiguous gradient[o..o+Y]
+    float_t eY[16];
     for (uint32_t t = 0; t < T; ++t) {
         const Sentence::Pos& pos = sen.pos[t];
+        const int32_t* uobs = sen.unigram_obs(t);
+        const float_t un = unorm_[t];
         for (int64_t y = 0; y < Y; ++y) {
-            // P(y_t = y|x) = alpha[t][y] * beta[t][y] / Z
-            float_t e = alpha_[t * Y + y] * beta_[t * Y + y] * unorm_[t];
-            for (uint32_t n = 0; n < pos.unigram_count; ++n) {
-                const auto o = model_->GetUnigramIndex(sen.unigram_obs(t)[n]);
-                gradient_[o + y] += e;
-            }
+            eY[y] = alpha_[t * Y + y] * beta_[t * Y + y] * un;
+        }
+        for (uint32_t n = 0; n < pos.unigram_count; ++n) {
+            const int64_t o = model_->GetUnigramIndex(uobs[n]);
+            float_t* g = gradient_.data() + o;
+            for (int64_t y = 0; y < Y; ++y) g[y] += eY[y];
         }
     }
 
+    // Bigram block: precompute e[d=yp*Y+y] per t, then write contiguous gradient[o..o+YY]
+    float_t eYY[256];
     for (uint32_t t = 1; t < T; ++t) {
         const Sentence::Pos& pos = sen.pos[t];
+        const int32_t* bobs = sen.bigram_obs(t);
+        const float_t bn = bnorm_[t];
         for (int64_t yp = 0, d = 0; yp < Y; ++yp) {
-            for (int64_t y = 0; y < Y; y++, d++) {
-                // P(y_{t-1} = yp, y_t = y|x) =
-                // alpha[t-1][yp] * psi[t][yp][y] * beta[t][y] / Z
-                float_t e = alpha_[(t-1) * Y + yp] *
-                            beta_[t * Y + y] *
-                            psi_[(t * Y + yp) * Y + y] *
-                            bnorm_[t];
-                for (uint32_t n = 0; n < pos.bigram_count; ++n) {
-                    auto o = model_->GetBigramIndex(sen.bigram_obs(t)[n]);
-                    gradient_[o + d] += e;
-                }
+            const float_t alpha_yp = alpha_[(t-1) * Y + yp];
+            for (int64_t y = 0; y < Y; ++y, ++d) {
+                eYY[d] = alpha_yp * beta_[t * Y + y] *
+                         psi_[(t * Y + yp) * Y + y] * bn;
             }
+        }
+        for (uint32_t n = 0; n < pos.bigram_count; ++n) {
+            const int64_t o = model_->GetBigramIndex(bobs[n]);
+            float_t* g = gradient_.data() + o;
+            for (int64_t d = 0; d < YY; ++d) g[d] += eYY[d];
         }
     }
 }

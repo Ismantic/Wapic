@@ -33,28 +33,45 @@ public:
         : scorer_(model), dataset_(dataset) {}
 
     Metric Run() {
-        Metric r;
-        for (size_t s = 0; s < dataset_->Size(); ++s) {
-            const Sentence* sen = dataset_->sens[s];
-            const size_t size = sen->Size();
+        const int64_t N = static_cast<int64_t>(dataset_->Size());
+        std::atomic<int64_t> tok_count{0};
+        std::atomic<int64_t> tok_err{0};
+        std::atomic<int64_t> sen_count{0};
+        std::atomic<int64_t> sen_err{0};
 
+        #pragma omp parallel
+        {
+            Scorer scorer(scorer_.GetModel());
             std::vector<int64_t> rs;
-            scorer_.Viterbi(*sen, rs);
-
-            bool error = false;
-            for (size_t t = 0; t < size; ++t) {
-                const auto& pos = sen->pos[t];
-                if (pos.label != rs[t]) {
-                    r.TokenErrors++;
-                    error = true;
+            int64_t lt = 0, le = 0, ls = 0, lse = 0;
+            #pragma omp for schedule(static) nowait
+            for (int64_t s = 0; s < N; ++s) {
+                const Sentence* sen = dataset_->sens[s];
+                const size_t size = sen->Size();
+                rs.clear();
+                scorer.Viterbi(*sen, rs);
+                bool error = false;
+                for (size_t t = 0; t < size; ++t) {
+                    if (sen->pos[t].label != rs[t]) {
+                        le++;
+                        error = true;
+                    }
                 }
+                lt += size;
+                ls += 1;
+                if (error) lse += 1;
             }
-            r.TokenCount += size;
-            r.SentenceCount += 1;
-            if (error) {
-                r.SentenceErrors += 1;
-            }
+            tok_count += lt;
+            tok_err += le;
+            sen_count += ls;
+            sen_err += lse;
         }
+
+        Metric r;
+        r.TokenCount = tok_count.load();
+        r.TokenErrors = tok_err.load();
+        r.SentenceCount = sen_count.load();
+        r.SentenceErrors = sen_err.load();
         return r;
     }
 

@@ -80,6 +80,7 @@ public:
     std::string pattern_file;
     std::string model_file;
     bool from_binary = false;  // fit: load training data from binary cache
+    uint32_t save_every = 0;   // fit: write checkpoint every N iters (0 = end only)
 
     uint32_t max_iterations;
     uint32_t nthread;
@@ -462,6 +463,13 @@ private:
                 }
                 else if (arg == "--from-bin") {
                     option.from_binary = true;
+                }
+                else if (arg == "--save-every") {
+                    if (++i >= argc) {
+                        error_msg = "Missing save-every argument";
+                        return false;
+                    }
+                    option.save_every = std::stoul(argv[i]);
                 }
 
                 else {

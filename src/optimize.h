@@ -69,8 +69,17 @@ public:
 
     void Optimize();
 
+    // Periodically Save to checkpoint_path_ every checkpoint_every_ iters.
+    // checkpoint_every_ = 0 disables.
+    void SetCheckpoint(const std::string& path, uint32_t every) {
+        checkpoint_path_ = path;
+        checkpoint_every_ = every;
+    }
+
 private:
     Model* model_;
+    std::string checkpoint_path_;
+    uint32_t checkpoint_every_ = 0;
     const uint32_t window_size;
     const float_t stopeps;
     const int64_t F;

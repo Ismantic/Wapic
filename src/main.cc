@@ -79,6 +79,9 @@ int main(int argc, char* argv[]) {
                                        option.GetOptimizerSpec<wati::LBFGS>()->max_line_search,
                                        option.L1, option.L2,
                                        option.nthread);
+                if (option.save_every > 0) {
+                    s.SetCheckpoint(option.output_file, option.save_every);
+                }
                 s.Optimize();
             }
 

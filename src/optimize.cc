@@ -93,6 +93,7 @@ void SGDOptimizer::Optimize() {
 }
 
 void LBFGSOptimizer::Optimize() {
+    omp_set_num_threads(static_cast<int>(std::max(1u, nthread_)));
     GradientComputer* G = new GradientComputer(model_, g, nthread_);
     float_t fx = G->RunGradientComputation(r1, r2);
 
@@ -125,6 +126,12 @@ void LBFGSOptimizer::Optimize() {
 
         if (CheckConvergence(k, fx)) {
             break;
+        }
+
+        if (checkpoint_every_ > 0 && ((k + 1) % checkpoint_every_) == 0) {
+            std::cerr << "[checkpoint] saving to " << checkpoint_path_
+                      << " at iter " << (k + 1) << std::endl;
+            model_->Save(checkpoint_path_);
         }
     }
 
