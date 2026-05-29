@@ -98,6 +98,67 @@ nohup ./build/wapic fit -p data/pattern_tri.txt --from-bin \
 - 预期 5-10 min
 - **用户提示：如果 stage 2 出来 F1 ≈ 98 + 李镇全稳，stage 3 可跳过**
 
+## 数据生成 pipeline（重新生成时参考）
+
+### Stage 2 数据 `pd_aug_train.txt` （name-rich）
+
+输入需要：`news_cut.jsonl`（cut_corpus.py 用 LTP/base1 切好的 News 数据，每行 `{"source", "cut"}`）
+
+```bash
+python scripts/extract_name_rich.py \
+    --input data/news_cut.jsonl \
+    --output data/pd_aug.jsonl \
+    --limit-in 300000 --limit-out 80000
+
+python scripts/jsonl_to_bmes.py \
+    --input data/pd_aug.jsonl \
+    --out-bmes data/pd_aug_train.txt \
+    --out-nolabel data/pd_aug_nolabel.txt \
+    --max-chars 200
+```
+
+`extract_name_rich.py` 用 LTP NER 筛 `Nh`-tagged 句子 + 内置 split_punct。
+
+**替代路径**（如要更多人名覆盖）：
+- `extract_with_namelist.py` —— 1.14M `Chinese-Names-Corpus` 词表 grep
+- `name_synth.py` —— 纯合成（不依赖语料）
+- `name_amplify.py` —— 抽常见人名 + 25 模板放大
+
+### Stage 3 数据 `pd_mp_train.txt` （PD modern+punct）
+
+输入需要：PD-1998 原始 `199801.txt` ~ `199805.txt`（199806 留测试）
+
+```bash
+# 1. 解析 PD 原始（去 POS / NER 括号 / 句子 ID）
+for m in 199801 199802 199803 199804 199805; do
+  python scripts/parse_pd1998.py \
+    --src data/pd_raw/${m}.txt \
+    --out data/pd_parsed_${m}.jsonl
+done
+cat data/pd_parsed_*.jsonl > data/pd_parsed.jsonl
+
+# 2. 现代化（仅合并不拆分）：LTP NER 把连续的 Nh/Ni/Ns token 合并
+python scripts/modernize_pd.py \
+    --input data/pd_parsed.jsonl \
+    --output data/pd_modern.jsonl
+
+# 3. 标点拆 token：13:10 → 13 : 10
+python scripts/split_punct.py \
+    --input data/pd_modern.jsonl \
+    --output data/pd_mp.jsonl
+
+# 4. 转 BMES
+python scripts/jsonl_to_bmes.py \
+    --input data/pd_mp.jsonl \
+    --out-bmes data/pd_mp_train.txt \
+    --out-nolabel data/pd_mp_nolabel.txt \
+    --max-chars 200
+```
+
+测试集 `pd_mp_test.txt` 同 pipeline，输入用 `199806.txt`。
+
+⚠️ 重要：parse_pd1998.py **必须用 UTF-8** 编码读（不是 gb18030）。早期 bug 导致 F1 虚高。
+
 ## 评测脚本
 
 ### 跑测试集 F1
