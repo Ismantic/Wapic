@@ -201,6 +201,29 @@ cases = [
 
 **目标新模型 `wapic_12m_tri_s2.wac`** 应优于上述所有，且李镇全 5/5。
 
+## 字符类型特征（新 pipeline，比 trigram 省内存）
+
+`pattern_type.txt` + 2 列训练数据（char\ttype），type ∈ `{h, d, a, p, o}`：
+- `h` 汉字 / `d` 数字 (0-9, ０-９) / `a` 字母 (A-Z, a-z, Ａ-ｚ) / `p` 标点 + 符号 / `o` 其他
+
+**生成训练数据**（jsonl_to_bmes.py 默认就带 type 列）：
+```bash
+python scripts/jsonl_to_bmes.py --input data/pd_mp.jsonl \
+    --out-bmes data/pd_mp_train.txt \
+    --out-nolabel data/pd_mp_nolabel.txt --max-chars 200
+```
+
+**推理预处理**（input 加 type 列）：
+```bash
+python scripts/add_type.py --input input_chars.txt --output input_typed.txt
+./build/wapic test -m model.wac input_typed.txt output.txt
+```
+
+**优点**：
+- type 维度只 5 种值，特征数膨胀小（vs trigram 数千万特征）
+- 数字、英文、标点边界识别强（"2018年" / "Hello," 等）
+- 内存预估 +20-30% vs 不带 type（trigram 是 +200%）
+
 ## 内存/性能注意
 
 - 12M obs.bin 9 GB 走 mmap，**不算 RSS**（但 free 显示偏低）
