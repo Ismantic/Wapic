@@ -37,7 +37,10 @@ public:
     Dataset* LoadBinary(const std::string& prefix);
 
     void LoadFeatures(std::istream& file);
-    void SaveFeatures(std::ostream& file) const;
+    // If obs_alive != nullptr, only writes observations marked true (n_alive count).
+    void SaveFeatures(std::ostream& file, bool binary = false,
+                      const std::vector<bool>* obs_alive = nullptr,
+                      int64_t n_alive_count = 0) const;
 
     size_t LabelCount() const { return labels->Size(); } 
     size_t ObservationCount() const { return observations->Size(); }

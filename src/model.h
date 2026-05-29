@@ -105,8 +105,17 @@ public:
 
     void Sync();
 
-    void Save(const std::string& filename) const;
-    void Load(const std::string& filename);        
+    // binary=true uses compact binary format for tries + weights (3-5x smaller).
+    // prune=true drops observations whose features are all zero (lossless).
+    void Save(const std::string& filename, bool binary = false, bool prune = false) const;
+    void Load(const std::string& filename);
+
+    // For warm-start fine-tuning: lock label/observation tries so subsequent
+    // LoadData/LoadDataBinary won't add new features. Existing weights kept.
+    void LockFeatures() {
+        processor_->LockLabels();
+        processor_->LockObservations();
+    }
 };
 
 } // namespace wati

@@ -111,6 +111,12 @@ void Trie::Save(std::ostream& file) const {
     }
 }
 
+void Trie::SaveBin(std::ostream& file) const {
+    file << "#TrieBin#" << data_.size() << "\n";
+    for (const auto& v : data_) {
+        WriteStrBin(file, v->value);
+    }
+}
 
 void Trie::Save(const std::string& filename) const {
     std::ofstream file(filename);
@@ -129,6 +135,24 @@ void Trie::Load(std::istream& file) {
         std::string line;
         line = ReadStr(file);
         Insert(line);
+    }
+}
+
+void Trie::LoadAuto(std::istream& file) {
+    std::string line;
+    std::getline(file, line);
+    if (line.find("#TrieBin#") == 0) {
+        int64_t count = std::stoll(line.substr(9));
+        for (int64_t i = 0; i < count; ++i) {
+            Insert(ReadStrBin(file));
+        }
+    } else {
+        // legacy text
+        size_t start = line.find("#Trie#") + 6;
+        int64_t count = std::stoll(line.substr(start));
+        for (int64_t i = 0; i < count; ++i) {
+            Insert(ReadStr(file));
+        }
     }
 }
 

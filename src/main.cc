@@ -1,6 +1,7 @@
 #include <iostream>
 #include <fstream>
 #include <sstream>
+#include <cmath>
 
 #include "option.h"
 #include "model.h"
@@ -51,9 +52,41 @@ int main(int argc, char* argv[]) {
             processor.BuildBinary(in, option.output_file, option.nthread);
             break;
         }
+        case wati::RunMode::CONVERT: {
+            // In convert mode, the lone positional arg is the output (input via -m).
+            std::string out_path = option.output_file.empty() ? option.input_file
+                                                              : option.output_file;
+            wati::Model model(std::make_unique<wati::DataProcessor>());
+            std::cerr << "Loading " << option.model_file << " ..." << std::flush;
+            model.Load(option.model_file);
+            std::cerr << " done.\n";
+
+            if (option.prune_threshold > 0.0) {
+                auto& theta = model.GetWeights();
+                int64_t zeroed = 0;
+                for (auto& w : theta) {
+                    if (std::abs(w) < option.prune_threshold) {
+                        w = 0.0;
+                        zeroed++;
+                    }
+                }
+                std::cerr << "[prune-threshold] zeroed " << zeroed << "\n";
+            }
+            model.Save(out_path, option.save_binary, option.save_prune);
+            std::cerr << "Saved to " << out_path << "\n";
+            break;
+        }
         case wati::RunMode::FIT: {
             wati::Model model(std::make_unique<wati::DataProcessor>());
-            model.LoadPatterns(option.pattern_file);
+            if (option.init_from.empty()) {
+                model.LoadPatterns(option.pattern_file);
+            } else {
+                std::cerr << "Warm-start: loading " << option.init_from
+                          << " ..." << std::flush;
+                model.Load(option.init_from);
+                model.LockFeatures();
+                std::cerr << " done. (features locked, will continue from these weights)\n";
+            }
             if (option.from_binary) {
                 model.LoadDataBinary(option.input_file);
             } else {
@@ -85,7 +118,20 @@ int main(int argc, char* argv[]) {
                 s.Optimize();
             }
 
-            model.Save(option.output_file);
+            // Optional: zero out small-magnitude weights before save (aggressive prune).
+            if (option.prune_threshold > 0.0) {
+                auto& theta = model.GetWeights();
+                int64_t zeroed = 0;
+                for (auto& w : theta) {
+                    if (std::abs(w) < option.prune_threshold) {
+                        w = 0.0;
+                        zeroed++;
+                    }
+                }
+                std::cerr << "[prune-threshold] zeroed " << zeroed
+                          << " weights below " << option.prune_threshold << std::endl;
+            }
+            model.Save(option.output_file, option.save_binary, option.save_prune);
             break;
         }
         case wati::RunMode::LABEL: {

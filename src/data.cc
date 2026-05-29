@@ -485,18 +485,42 @@ void DataProcessor::LoadFeatures(std::istream& file) {
         }
     }
 
-    labels->Load(file);
-    observations->Load(file);
+    labels->LoadAuto(file);
+    observations->LoadAuto(file);
 }
 
-void DataProcessor::SaveFeatures(std::ostream& file) const {
+void DataProcessor::SaveFeatures(std::ostream& file, bool binary,
+                                 const std::vector<bool>* obs_alive,
+                                 int64_t n_alive_count) const {
     file << "#Patterns#" << patterns.size() << "#" << token_count << "\n";
     for (uint32_t p = 0; p < patterns.size(); p++) {
         WriteStr(file, patterns[p]->GetSource());
     }
 
-    labels->Save(file);
-    observations->Save(file);
+    if (binary) {
+        labels->SaveBin(file);
+    } else {
+        labels->Save(file);
+    }
+
+    if (obs_alive) {
+        // Write only alive observations, preserving original order.
+        const int64_t O = static_cast<int64_t>(observations->Size());
+        if (binary) {
+            file << "#TrieBin#" << n_alive_count << "\n";
+            for (int64_t o = 0; o < O; o++) {
+                if ((*obs_alive)[o]) WriteStrBin(file, observations->GetValue(o));
+            }
+        } else {
+            file << "#Trie#" << n_alive_count << "\n";
+            for (int64_t o = 0; o < O; o++) {
+                if ((*obs_alive)[o]) WriteStr(file, observations->GetValue(o));
+            }
+        }
+    } else {
+        if (binary) observations->SaveBin(file);
+        else observations->Save(file);
+    }
 }
 
 } // namespace wati

@@ -17,7 +17,8 @@ enum class RunMode {
     FIT,
     LABEL,
     REPL,
-    BUILD
+    BUILD,
+    CONVERT
 };
 
 enum class OptimizerType {
@@ -81,6 +82,10 @@ public:
     std::string model_file;
     bool from_binary = false;  // fit: load training data from binary cache
     uint32_t save_every = 0;   // fit: write checkpoint every N iters (0 = end only)
+    bool save_binary = false;  // fit: save model in compact binary format
+    bool save_prune = false;   // fit: drop dead observations on save
+    float_t prune_threshold = 0.0;  // fit: zero out |theta_f| < this before save
+    std::string init_from;     // fit: warm-start from this model (lock tries, continue L-BFGS)
 
     uint32_t max_iterations;
     uint32_t nthread;
@@ -219,6 +224,17 @@ public:
                     return false;
                 }
                 break;
+
+            case RunMode::CONVERT:
+                if (model_file.empty()) {
+                    error_msg = "Input model file is required (-m)";
+                    return false;
+                }
+                if (output_file.empty() && input_file.empty()) {
+                    error_msg = "Output model file is required";
+                    return false;
+                }
+                break;
         }
         
         if (optimizer_spec_) {
@@ -245,7 +261,8 @@ public:
 
         // Try parsing first arg as mode; if not a mode, default to REPL
         int opts_start;
-        if (first_arg == "fit" || first_arg == "test" || first_arg == "build") {
+        if (first_arg == "fit" || first_arg == "test" ||
+            first_arg == "build" || first_arg == "convert") {
             ParseMode(first_arg, option.run_mode, error_msg);
             opts_start = 2;
         } else {
@@ -310,6 +327,9 @@ private:
             return true;
         } else if (mode_str == "build") {
             mode = RunMode::BUILD;
+            return true;
+        } else if (mode_str == "convert") {
+            mode = RunMode::CONVERT;
             return true;
         } else {
             error_msg = "Unknown mode: " + mode_str;
@@ -470,6 +490,26 @@ private:
                         return false;
                     }
                     option.save_every = std::stoul(argv[i]);
+                }
+                else if (arg == "--save-binary" || arg == "--bin-model") {
+                    option.save_binary = true;
+                }
+                else if (arg == "--save-prune") {
+                    option.save_prune = true;
+                }
+                else if (arg == "--prune-threshold") {
+                    if (++i >= argc) {
+                        error_msg = "Missing prune-threshold argument";
+                        return false;
+                    }
+                    option.prune_threshold = std::stod(argv[i]);
+                }
+                else if (arg == "--init-from") {
+                    if (++i >= argc) {
+                        error_msg = "Missing init-from path";
+                        return false;
+                    }
+                    option.init_from = argv[i];
                 }
 
                 else {

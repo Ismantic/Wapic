@@ -129,27 +129,55 @@ void Scorer::Viterbi(const Sentence& sen,
 
 void Scorer::LabelSentences(std::istream& in, std::ostream& out) {
     const DataProcessor* processor = model_->GetDataProcessor();
+    const size_t BATCH = 256;
+
+    struct Result {
+        std::vector<int64_t> labels;
+        std::vector<float_t> path_scores;
+        float_t score = 0.0;
+        bool valid = false;
+    };
+
     while (true) {
-        RawStrs* raw = processor->ReadRawStrs(in);
-        if (raw == nullptr) {
-            break;
+        // Read a batch of sentences serially (file I/O).
+        std::vector<Sentence*> sens;
+        sens.reserve(BATCH);
+        while (sens.size() < BATCH) {
+            RawStrs* raw = processor->ReadRawStrs(in);
+            if (raw == nullptr) break;
+            Sentence* sen = processor->RawToSentence(raw, false);
+            delete raw;
+            if (sen) sens.push_back(sen);
+        }
+        if (sens.empty()) break;
+
+        std::vector<Result> results(sens.size());
+        const int B = static_cast<int>(sens.size());
+
+        #pragma omp parallel
+        {
+            Scorer local(model_);
+            #pragma omp for schedule(dynamic, 4)
+            for (int i = 0; i < B; i++) {
+                const size_t T = sens[i]->Size();
+                results[i].labels.resize(T);
+                results[i].path_scores.resize(T);
+                local.Viterbi(*sens[i], results[i].labels,
+                              &results[i].score, &results[i].path_scores);
+                results[i].valid = true;
+            }
         }
 
-        Sentence* sen = processor->RawToSentence(raw, false);
-        const size_t T = sen->Size();
-        std::vector<int64_t> labels(T);
-        float_t score;
-        std::vector<float_t> path_scores(T);
-        Viterbi(*sen, labels, &score, &path_scores);
-        out << "score=" << score << "\n";
-        for (size_t t = 0; t < T; ++t) {
-            auto a = labels[t];
-            std::string s = processor->GetLabelStr(a);
-            out << s << " " << path_scores[t] << "\n";
+        // Write outputs serially in order.
+        for (int i = 0; i < B; i++) {
+            out << "score=" << results[i].score << "\n";
+            for (size_t t = 0; t < results[i].labels.size(); ++t) {
+                out << processor->GetLabelStr(results[i].labels[t])
+                    << " " << results[i].path_scores[t] << "\n";
+            }
+            out << "\n";
+            delete sens[i];
         }
-        out << "\n";
-        delete raw;
-        delete sen;
     }
 }
 

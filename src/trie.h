@@ -58,6 +58,11 @@ public:
     void Save(std::ostream& file) const;
     void Load(std::istream& file);
 
+    // Compact binary save: "#TrieBin#N\n" then N entries of (u16 len, bytes).
+    void SaveBin(std::ostream& file) const;
+    // Auto-detect header: #TrieBin# vs #Trie#
+    void LoadAuto(std::istream& file);
+
     size_t Size() const { return data_.size(); }
     bool SetLock(bool n) {
         bool o = is_lock_;
