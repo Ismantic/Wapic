@@ -73,14 +73,14 @@ def main():
                 continue
             for c, lbl in pairs:
                 if use_type:
-                    fout.write(f"{c}\t{char_type(c)}\t{lbl}\n")
+                    fout.write(f"{c} {char_type(c)} {lbl}\n")
                 else:
                     fout.write(f"{c} {lbl}\n")
             fout.write("\n")
             if fnl:
                 for c, _ in pairs:
                     if use_type:
-                        fnl.write(f"{c}\t{char_type(c)}\n")
+                        fnl.write(f"{c} {char_type(c)}\n")
                     else:
                         fnl.write(f"{c}\n")
                 fnl.write("\n")

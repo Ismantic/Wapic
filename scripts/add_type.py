@@ -25,9 +25,9 @@ def main():
             if not s:
                 fout.write("\n")
                 continue
-            # input may already be "c\ttype" or just "c"
-            c = s.split("\t")[0] if "\t" in s else s.split()[0]
-            fout.write(f"{c}\t{char_type(c)}\n")
+            # input may already be "c type" or just "c"
+            c = s.split()[0]
+            fout.write(f"{c} {char_type(c)}\n")
 
 
 if __name__ == "__main__":
