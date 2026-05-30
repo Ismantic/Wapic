@@ -150,6 +150,54 @@ public:
         return starts;
     }
 
+    // cut_smart:中英混合输入的正确切词。
+    // Wapic 是纯中文 CRF — 英文不该让它处理(会切成单字)。
+    // 步骤:
+    //   1) 按空白切 segments
+    //   2) 全无中文 segment → 整体当 1 word
+    //   3) 含中文 segment → wapic CRF 切
+    // 用于:WWM 数据准备(中文整词 mask + 英文 BPE word group mask)。
+    std::vector<std::string> cut_smart(const std::string& text) {
+        std::vector<std::string> out;
+        // utf-8 split by ASCII whitespace
+        size_t i = 0;
+        while (i < text.size()) {
+            // skip whitespace
+            while (i < text.size() && std::isspace((unsigned char)text[i])) i++;
+            if (i >= text.size()) break;
+            size_t start = i;
+            while (i < text.size() && !std::isspace((unsigned char)text[i])) i++;
+            std::string seg = text.substr(start, i - start);
+            // check chinese-presence
+            auto chars = utf8_chars(seg);
+            bool has_chinese = false;
+            for (const auto& c : chars) {
+                // crude:多字节(>=3 byte)且头字节是 0xE4-0xE9 大致是 CJK 范围(U+4E00-U+9FFF)
+                if (c.size() >= 3) {
+                    unsigned char b0 = (unsigned char)c[0];
+                    if (b0 >= 0xE4 && b0 <= 0xE9) { has_chinese = true; break; }
+                }
+            }
+            if (!has_chinese) {
+                // 全英文/数字 → 整段当 1 word
+                out.push_back(seg);
+            } else {
+                // 含中文 → wapic CRF 切
+                std::vector<std::string> words = cut(seg);
+                for (auto& w : words) out.push_back(std::move(w));
+            }
+        }
+        return out;
+    }
+
+    std::vector<std::vector<std::string>>
+    cut_smart_batch(const std::vector<std::string>& texts) {
+        std::vector<std::vector<std::string>> out;
+        out.reserve(texts.size());
+        for (const auto& t : texts) out.push_back(cut_smart(t));
+        return out;
+    }
+
     int64_t label_count() const { return model_->LabelCount(); }
     int64_t feature_count() const { return model_->FeatureCount(); }
 
@@ -176,6 +224,12 @@ PYBIND11_MODULE(_core, m) {
         .def("word_starts", &Segmenter::word_starts, py::arg("text"),
              "Char indices of word starts, plus final sentinel = len(chars). "
              "Useful for WWM mask building.")
+        .def("cut_smart", &Segmenter::cut_smart, py::arg("text"),
+             "Smart cut for mixed CN/EN: split by whitespace first; "
+             "全英文 segment 整体 1 word(不让 wapic 切散),含中文 segment 用 CRF 切。"
+             "适用 BERT WWM 数据 prep 等 LLM pretrain scenario。")
+        .def("cut_smart_batch", &Segmenter::cut_smart_batch, py::arg("texts"),
+             "Batch version of cut_smart.")
         .def_property_readonly("label_count", &Segmenter::label_count)
         .def_property_readonly("feature_count", &Segmenter::feature_count);
 }
