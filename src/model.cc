@@ -126,6 +126,35 @@ void Model::Save(const std::string& filename, bool binary, bool prune) const {
     }
 }
 
+void Model::BuildDeadMasks() {
+    const int64_t Y = label_count_;
+    const int64_t O = observation_count_;
+    unigram_dead_.assign(O, 0);
+    bigram_dead_.assign(O, 0);
+    for (int64_t o = 0; o < O; o++) {
+        if (kind_[o] & 1) {
+            bool dead = true;
+            const float_t* w = theta_.data() + uoff_[o];
+            for (int64_t y = 0; y < Y; y++) {
+                if (w[y] != 0.0) { dead = false; break; }
+            }
+            unigram_dead_[o] = dead ? 1 : 0;
+        } else {
+            unigram_dead_[o] = 1;
+        }
+        if (kind_[o] & 2) {
+            bool dead = true;
+            const float_t* w = theta_.data() + boff_[o];
+            for (int64_t d = 0; d < Y * Y; d++) {
+                if (w[d] != 0.0) { dead = false; break; }
+            }
+            bigram_dead_[o] = dead ? 1 : 0;
+        } else {
+            bigram_dead_[o] = 1;
+        }
+    }
+}
+
 void Model::Load(const std::string& filename) {
     std::ifstream file(filename, std::ios::in | std::ios::binary);
     processor_->LoadFeatures(file);
@@ -170,5 +199,7 @@ void Model::Load(const std::string& filename) {
             theta_[f] = v;
         }
     }
+
+    BuildDeadMasks();
 }
 } // namespace wati

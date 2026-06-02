@@ -62,6 +62,8 @@ public:
         for (int64_t i = 0; i < n; i++) {
             label_strs_[i] = processor_->GetLabelStr(i);
         }
+        // Inference-only: obs strings won't be needed (DAT handles lookups).
+        model_->FreeObservationStrings();
     }
 
     // Get all chars + BMES tags for one text.
@@ -81,15 +83,12 @@ public:
         const size_t kChunk = 1024;
         for (size_t start = 0; start < chars.size(); start += kChunk) {
             size_t end = std::min(start + kChunk, chars.size());
-            std::string buf;
-            for (size_t i = start; i < end; i++) { buf += chars[i]; buf += '\n'; }
-            buf += '\n';
-            std::istringstream iss(buf);
-            wati::RawStrs* raw = processor_->ReadRawStrs(iss);
-            if (!raw) { for (size_t i = start; i < end; i++) tags.push_back("S"); continue; }
-            wati::Sentence* sen = processor_->RawToSentence(raw, false);
+            // Build RawStrs directly (skip string buffer + istringstream).
+            wati::RawStrs raw;
+            raw.strs.reserve(end - start);
+            for (size_t i = start; i < end; i++) raw.strs.push_back(chars[i]);
+            wati::Sentence* sen = processor_->RawToSentence(&raw, false);
             if (!sen) {
-                delete raw;
                 for (size_t i = start; i < end; i++) tags.push_back("S");
                 continue;
             }
@@ -104,7 +103,6 @@ public:
             }
             // Pad with S if Viterbi returned fewer than expected.
             while (tags.size() < end) tags.push_back("S");
-            delete raw;
             delete sen;
         }
         return {chars, tags};

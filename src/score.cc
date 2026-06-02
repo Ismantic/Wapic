@@ -28,17 +28,23 @@ void Scorer::ComputeUnigramScores(const Sentence& sen) {
     const size_t T = sen.Size();
     const int64_t Y = model_->LabelCount();
 
+    // Loop order n,y so each feature's weight slice is loaded once.
+    // sum_y is per-position accumulator across features.
+    float_t sum_y[8] = {0}; // Y up to 8 fits on stack; BMES = 4.
     for (uint32_t t = 0; t < T; ++t) {
         const Sentence::Pos& pos = sen.pos[t];
-        for (int64_t y = 0; y < Y; ++y) {
-            float_t sum = 0.0;
-            for (uint32_t n = 0; n < pos.unigram_count; ++n) {
-                const auto w = model_->GetUnigramWeights(sen.unigram_obs(t)[n]);
-                sum += w[y];
-            }
-            for (int64_t yp = 0; yp < Y; yp++) {
-                psi_[t][yp][y] = sum;
-            }
+        const int32_t* obs = sen.unigram_obs(t);
+        for (int64_t y = 0; y < Y; ++y) sum_y[y] = 0.0;
+        for (uint32_t n = 0; n < pos.unigram_count; ++n) {
+            int32_t o = obs[n];
+            if (model_->IsUnigramDead(o)) continue;
+            const auto w = model_->GetUnigramWeights(o);
+            for (int64_t y = 0; y < Y; ++y) sum_y[y] += w[y];
+        }
+        // Broadcast: psi_[t][yp][y] = sum_y[y]
+        for (int64_t yp = 0; yp < Y; ++yp) {
+            auto& row = psi_[t][yp];
+            for (int64_t y = 0; y < Y; ++y) row[y] = sum_y[y];
         }
     }
 }
@@ -46,18 +52,23 @@ void Scorer::ComputeUnigramScores(const Sentence& sen) {
 void Scorer::ComputeBigramScores(const Sentence& sen) {
     const size_t T = sen.Size();
     const int64_t Y = model_->LabelCount();
+    const size_t YY = static_cast<size_t>(Y) * static_cast<size_t>(Y);
 
+    float_t sum_d[64] = {0}; // Y*Y up to 64; BMES = 16.
     for (uint32_t t = 1; t < T; ++t) {
         const Sentence::Pos& pos = sen.pos[t];
-        for (int64_t yp = 0, d = 0; yp < Y; yp++) {
-            for (int64_t y = 0; y < Y; y++, d++) {
-                float_t sum = 0.0;
-                for (uint32_t n = 0; n < pos.bigram_count; n++) {
-                    const auto w = model_->GetBigramWeights(sen.bigram_obs(t)[n]);
-                    sum += w[d];
-                }
-                psi_[t][yp][y] += sum;
-            }
+        const int32_t* obs = sen.bigram_obs(t);
+        for (size_t d = 0; d < YY; ++d) sum_d[d] = 0.0;
+        for (uint32_t n = 0; n < pos.bigram_count; ++n) {
+            int32_t o = obs[n];
+            if (model_->IsBigramDead(o)) continue;
+            const auto w = model_->GetBigramWeights(o);
+            for (size_t d = 0; d < YY; ++d) sum_d[d] += w[d];
+        }
+        // Add to psi: psi_[t][yp][y] += sum_d[yp*Y+y]
+        for (int64_t yp = 0, d = 0; yp < Y; ++yp) {
+            auto& row = psi_[t][yp];
+            for (int64_t y = 0; y < Y; ++y, ++d) row[y] += sum_d[d];
         }
     }
 }

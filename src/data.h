@@ -60,6 +60,13 @@ public:
     void LockObservations() {
         observations->SetLock(true);
     }
+
+    // Inference-only: drop obs trie's value strings (saves ~hundreds of MB on
+    // large models). Lookups still work via DAT; GetObservationStr(i) becomes
+    // empty. Label strings are kept (needed to emit BMES tags).
+    void FreeObservationStrings() {
+        observations->FreeValueStrings();
+    }
 };
 
 } // namespace wati

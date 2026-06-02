@@ -247,3 +247,9 @@ RESULT exp_h15_3_h121_3charzh_anc2m_i50: size=80M F1_pdmp=97.74 F1_12m=97.43 nam
 RESULT exp_h15_3_h121_3charzh_anc2m_i50_p0.15: size=54M F1_pdmp=97.73 F1_12m=97.40 names=14/15 bcv2=175/200 bcv3=320/500
 ===Batch H15 DONE===
 2026年 06月 02日 星期二 02:52:43 CST
+=== Batch H16: title-attachment boundary attack ===
+2026年 06月 02日 星期二 08:48:54 CST
+RESULT exp_h16_1_h152_PLUS_title100k_i50: size=78M F1_pdmp=97.74 F1_12m=97.02 names=15/15 bcv2=182/200 bcv3=372/500
+RESULT exp_h16_1_h152_PLUS_title100k_i50_p0.15: size=56M F1_pdmp=97.72 F1_12m=96.98 names=15/15 bcv2=184/200 bcv3=365/500
+=== Batch H17: natural OpenNews 3M / 3char 1M scaling ===
+2026年 06月 02日 星期二 09:46:07 CST

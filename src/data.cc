@@ -182,7 +182,7 @@ Sentence* DataProcessor::RawToSentence(const RawStrs* raw, bool e) const {
     if (!tos) return nullptr;
 
     Sentence* sen = TokensToSentence(tos);
-    
+
     delete tos;
     return sen;
 }

@@ -20,7 +20,7 @@ private:
     std::unique_ptr<Dataset> data_;
 
     // Size
-    int64_t label_count_; // Y 
+    int64_t label_count_; // Y
     int64_t observation_count_; // O
     int64_t feature_count_; // F
 
@@ -29,6 +29,12 @@ private:
     std::vector<int64_t> uoff_; // [O] unigram weights offset
     std::vector<int64_t> boff_; // [O] bigram weights offset
     std::vector<float_t> theta_; // [F] feature weights
+
+    // Inference fast path: after Load(), mark observations whose weights are
+    // all zero (pruned). Inference can skip them without touching theta_.
+    std::vector<uint8_t> unigram_dead_; // [O] 1 = all unigram weights == 0
+    std::vector<uint8_t> bigram_dead_;  // [O] 1 = all bigram weights == 0
+    void BuildDeadMasks();
 
 public:
     void LoadPatterns(const std::string& filename) {
@@ -63,7 +69,7 @@ public:
     int64_t GetUnigramIndex(int64_t n) const {
         return uoff_[n];
     }
- 
+
     const float_t* GetBigramWeights(int64_t n) const {
         const float_t* w = theta_.data() + boff_[n];
         return w;
@@ -74,6 +80,14 @@ public:
     }
     int64_t GetBigramIndex(int64_t n) const {
         return boff_[n];
+    }
+
+    // Inference dead-feature skip: true if all weights are zero for this obs.
+    inline bool IsUnigramDead(int64_t n) const {
+        return !unigram_dead_.empty() && unigram_dead_[n];
+    }
+    inline bool IsBigramDead(int64_t n) const {
+        return !bigram_dead_.empty() && bigram_dead_[n];
     }
 
     const std::vector<float_t>& GetWeights() const { return theta_; }
@@ -115,6 +129,11 @@ public:
     void LockFeatures() {
         processor_->LockLabels();
         processor_->LockObservations();
+    }
+
+    // Inference-only: free observation strings (kept only for save/export).
+    void FreeObservationStrings() {
+        processor_->FreeObservationStrings();
     }
 };
 
