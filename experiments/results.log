@@ -253,3 +253,15 @@ RESULT exp_h16_1_h152_PLUS_title100k_i50: size=78M F1_pdmp=97.74 F1_12m=97.02 na
 RESULT exp_h16_1_h152_PLUS_title100k_i50_p0.15: size=56M F1_pdmp=97.72 F1_12m=96.98 names=15/15 bcv2=184/200 bcv3=365/500
 === Batch H17: natural OpenNews 3M / 3char 1M scaling ===
 2026年 06月 02日 星期二 09:46:07 CST
+RESULT exp_h17_1_h152_oh3m_i50: size=78M F1_pdmp=97.78 F1_12m=97.04 names=15/15 bcv2=184/200 bcv3=369/500
+RESULT exp_h17_1_h152_oh3m_i50_p0.15: size=56M F1_pdmp=97.76 F1_12m=96.99 names=15/15 bcv2=183/200 bcv3=361/500
+RESULT exp_h17_2_h152_3charzh1m_i50: size=78M F1_pdmp=97.79 F1_12m=97.10 names=15/15 bcv2=183/200 bcv3=377/500
+RESULT exp_h17_2_h152_3charzh1m_i50_p0.15: size=54M F1_pdmp=97.76 F1_12m=97.05 names=15/15 bcv2=182/200 bcv3=368/500
+===Batch H17 DONE===
+2026年 06月 02日 星期二 11:29:50 CST
+=== H18.2: H17.2 + decimal_focus 18.7k ===
+2026年 06月 02日 星期二 12:32:46 CST
+RESULT exp_h18_2_h172_PLUS_decfocus_i50: size=79M F1_pdmp=97.80 F1_12m=97.17 names=15/15 bcv2=184/200 bcv3=368/500
+RESULT exp_h18_2_h172_PLUS_decfocus_i50_p0.15: size=54M F1_pdmp=97.79 F1_12m=97.14 names=15/15 bcv2=181/200 bcv3=357/500
+===H18.2 DONE===
+2026年 06月 02日 星期二 13:25:33 CST
