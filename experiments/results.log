@@ -265,3 +265,7 @@ RESULT exp_h18_2_h172_PLUS_decfocus_i50: size=79M F1_pdmp=97.80 F1_12m=97.17 nam
 RESULT exp_h18_2_h172_PLUS_decfocus_i50_p0.15: size=54M F1_pdmp=97.79 F1_12m=97.14 names=15/15 bcv2=181/200 bcv3=357/500
 ===H18.2 DONE===
 2026年 06月 02日 星期二 13:25:33 CST
+=== H19.1 (manual eval, not via batch) ===
+2026年 06月 02日 星期二 14:36 CST
+RESULT exp_h19_1_h172_PLUS_bcv3mine_L1_0.015_i50: size=77M F1_pdmp=97.79 F1_12m=97.10 names=15/15 bcv2=183/200 bcv3=404/500
+RESULT exp_h19_1_h172_PLUS_bcv3mine_L1_0.015_i50_p0.15: size=54M F1_pdmp=97.77 F1_12m=- names=15/15 bcv2=182/200 bcv3=398/500
