@@ -269,3 +269,10 @@ RESULT exp_h18_2_h172_PLUS_decfocus_i50_p0.15: size=54M F1_pdmp=97.79 F1_12m=97.
 2026年 06月 02日 星期二 14:36 CST
 RESULT exp_h19_1_h172_PLUS_bcv3mine_L1_0.015_i50: size=77M F1_pdmp=97.79 F1_12m=97.10 names=15/15 bcv2=183/200 bcv3=404/500
 RESULT exp_h19_1_h172_PLUS_bcv3mine_L1_0.015_i50_p0.15: size=54M F1_pdmp=97.77 F1_12m=- names=15/15 bcv2=182/200 bcv3=398/500
+
+=== H21.1 (H17.2 mix + decimal_focus_v3, L1=0.01, no mining) ===
+2026年 06月 03日 星期三 11:00 CST
+RESULT exp_h21_1_h172_PLUS_decv3_i50: size=79M F1_pdmp=97.76 F1_12m=97.18 names=15/15 bcv2=183/200 bcv3=375/500 clean_held_out=354/379=93.4%
+RESULT exp_h21_1_h172_PLUS_decv3_i50_p0.15: size=56M F1_pdmp=97.74 names=15/15 bcv2=182/200 bcv3=363/500
+NOTE: 数字 case 全修 (1.25亿英镑/3.14万元/2.5% etc), 无 H20.2 的误粘问题 (姚知成分/尉迟恭单 OK).
+NOTE: 仍有轻微 decimal-induced 误粘 (源尚丹若/后古力娜扎/向兰平勇 on held-out).
