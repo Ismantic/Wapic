@@ -293,3 +293,11 @@ RESULT exp_h24_1_retag2_init_h172_L1_0.005_i50_p0.15: size=56M names=15/15 bcv2=
 NOTE: BREAKTHROUGH - 长句 约什·克伦克 修了, 数字/Latin/标点全规则分.
 NOTE: F1_12m_retag2=97.87 是历史最高 (vs H17.2 retag1=97.10).
 NOTE: 唯一已知未解: 包江苏(地名/姓名歧义)、向兰平勇(动词误粘) - 与 H17.2 同, 非新引入.
+
+=== H24.2 (init from v4 retag2 base, retag2 mix, L1=0.005, i=50) ===
+2026年 06月 03日 星期三 19:27 CST
+Stage 1 base: all12m_compact_v4_retag2 (L1=0.5 i=100, 247M base)
+RESULT exp_h24_2_init_v4_retag2_L1_0.005_i50: size=305M F1_pdmp_retag2=97.82 F1_12m_retag2=97.69 names=15/15 bcv2=190/200 bcv3=429/500
+RESULT exp_h24_2_init_v4_retag2_L1_0.005_i50_p0.20: size=100M F1_pdmp_retag2=97.78 F1_12m_retag2=97.64 names=15/15 bcv2=189/200 bcv3=435/500
+NOTE: BREAKTHROUGH - 包江苏 + 向兰平勇 历史首次修了, 所有 case 全通过.
+NOTE: bcv2 +6 vs H17.2, bcv3 +58 vs H17.2 - 真泛化提升.
