@@ -285,3 +285,11 @@ NOTE: 新约定 - 数字独立成 token (1.25亿元 -> 1 . 25 亿 元, 1998年 -
 NOTE: 数字 case 全修. F1 数字与旧 release 不可直接比较 (gold standard 改了).
 NOTE: bcv3 +4 vs H17.2 (377->381), bcv2 +1 (183->184).
 NOTE: 1 个 OOV outlier: 约什·克伦克 -> 1 token (H17.2 是 3 token), 其他 foreign-name 10/10 正确.
+
+=== H24.1 (retag_charset full: digit/latin/punct/CJK all type-boundary split, init from H17.2) ===
+2026年 06月 03日 星期三 15:47 CST
+RESULT exp_h24_1_retag2_init_h172_L1_0.005_i50: size=78M F1_pdmp_retag2=97.87 F1_12m_retag2=97.87 names=15/15 bcv2=184/200 bcv3=389/500
+RESULT exp_h24_1_retag2_init_h172_L1_0.005_i50_p0.15: size=56M names=15/15 bcv2=185/200 bcv3=375/500
+NOTE: BREAKTHROUGH - 长句 约什·克伦克 修了, 数字/Latin/标点全规则分.
+NOTE: F1_12m_retag2=97.87 是历史最高 (vs H17.2 retag1=97.10).
+NOTE: 唯一已知未解: 包江苏(地名/姓名歧义)、向兰平勇(动词误粘) - 与 H17.2 同, 非新引入.
