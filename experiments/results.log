@@ -276,3 +276,12 @@ RESULT exp_h21_1_h172_PLUS_decv3_i50: size=79M F1_pdmp=97.76 F1_12m=97.18 names=
 RESULT exp_h21_1_h172_PLUS_decv3_i50_p0.15: size=56M F1_pdmp=97.74 names=15/15 bcv2=182/200 bcv3=363/500
 NOTE: 数字 case 全修 (1.25亿英镑/3.14万元/2.5% etc), 无 H20.2 的误粘问题 (姚知成分/尉迟恭单 OK).
 NOTE: 仍有轻微 decimal-induced 误粘 (源尚丹若/后古力娜扎/向兰平勇 on held-out).
+
+=== H23.3 (retag digits in train + eval data, init from H17.2) ===
+2026年 06月 03日 星期三 13:17 CST
+RESULT exp_h23_3_retag_init_h172_i50: size=78M F1_pdmp_retag=97.87 F1_12m_retag=97.47 names=15/15 bcv2=184/200 bcv3=381/500
+RESULT exp_h23_3_retag_init_h172_i50_p0.15: size=55M F1_pdmp_retag=97.84 names=15/15 bcv2=185/200 bcv3=368/500
+NOTE: 新约定 - 数字独立成 token (1.25亿元 -> 1 . 25 亿 元, 1998年 -> 1998 年).
+NOTE: 数字 case 全修. F1 数字与旧 release 不可直接比较 (gold standard 改了).
+NOTE: bcv3 +4 vs H17.2 (377->381), bcv2 +1 (183->184).
+NOTE: 1 个 OOV outlier: 约什·克伦克 -> 1 token (H17.2 是 3 token), 其他 foreign-name 10/10 正确.
