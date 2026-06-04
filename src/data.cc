@@ -197,16 +197,83 @@ Sentence* DataProcessor::GetSentence(std::istream& file, bool e) const {
 }
 
 
-Dataset* DataProcessor::LoadDataset(std::istream& file, bool e) {
+Dataset* DataProcessor::LoadDataset(std::istream& file, bool e, uint32_t nthread) {
     Dataset* data = new Dataset();
 
-    while (!file.eof()) {
-        Sentence* sen = GetSentence(file, e);
-        if (!sen) break;
+    if (nthread <= 1) {
+        // Serial path (original).
+        while (!file.eof()) {
+            Sentence* sen = GetSentence(file, e);
+            if (!sen) break;
+            data->sens.push_back(sen);
+            data->max_sentence_size = std::max(data->max_sentence_size,
+                                               static_cast<uint32_t>(sen->Size()));
+        }
+        return data;
+    }
 
-        data->sens.push_back(sen);
-        data->max_sentence_size = std::max(data->max_sentence_size,
-                                           static_cast<uint32_t>(sen->Size()));
+    // Parallel pipelined path: a single producer thread reads RawStrs into a
+    // double-buffer; the main thread runs OpenMP-parallel RawToSentence on the
+    // other buffer. Append to dataset is serial but tiny.
+    //
+    // Safe only when label/obs tries are locked (warm-start); caller enforces.
+    const size_t batch_size = 4096;
+    struct Buffer {
+        std::vector<RawStrs*> batch;
+        std::vector<Sentence*> sens;
+        bool eof = false;
+    };
+    Buffer buf_a, buf_b;
+    buf_a.batch.reserve(batch_size);
+    buf_b.batch.reserve(batch_size);
+
+    auto fill_buffer = [&](Buffer& b) {
+        b.batch.clear();
+        b.eof = false;
+        while (b.batch.size() < batch_size) {
+            RawStrs* raw = ReadRawStrs(file);
+            if (!raw) { b.eof = true; break; }
+            b.batch.push_back(raw);
+        }
+    };
+
+    // Prefill first buffer.
+    fill_buffer(buf_a);
+
+    Buffer* cur = &buf_a;
+    Buffer* next = &buf_b;
+    std::thread reader;  // background reader for next batch
+
+    while (!cur->batch.empty()) {
+        // Kick off async read for the NEXT batch while we process current.
+        if (!cur->eof) {
+            reader = std::thread([&]{ fill_buffer(*next); });
+        }
+
+        // Process current batch in parallel.
+        const int B = static_cast<int>(cur->batch.size());
+        cur->sens.assign(B, nullptr);
+
+        #pragma omp parallel for schedule(static) num_threads(nthread)
+        for (int i = 0; i < B; i++) {
+            cur->sens[i] = RawToSentence(cur->batch[i], e);
+        }
+
+        // Serial append + delete raw (tiny work).
+        for (int i = 0; i < B; i++) {
+            if (cur->sens[i]) {
+                data->sens.push_back(cur->sens[i]);
+                data->max_sentence_size = std::max(data->max_sentence_size,
+                                                   static_cast<uint32_t>(cur->sens[i]->Size()));
+            }
+            delete cur->batch[i];
+            cur->batch[i] = nullptr;
+        }
+
+        // Wait for next batch read to finish; swap.
+        if (reader.joinable()) reader.join();
+        if (cur->eof) break;
+        std::swap(cur, next);
     }
 
     return data;

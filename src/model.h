@@ -41,9 +41,9 @@ public:
         processor_->LoadPatterns(filename);
     }
 
-    void LoadData(const std::string& filename) {
+    void LoadData(const std::string& filename, uint32_t nthread = 1) {
         std::ifstream file(filename);
-        data_ = std::unique_ptr<Dataset>(processor_->LoadDataset(file, true));
+        data_ = std::unique_ptr<Dataset>(processor_->LoadDataset(file, true, nthread));
     }
 
     void LoadDataBinary(const std::string& prefix) {

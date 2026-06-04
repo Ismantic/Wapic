@@ -90,7 +90,10 @@ int main(int argc, char* argv[]) {
             if (option.from_binary) {
                 model.LoadDataBinary(option.input_file);
             } else {
-                model.LoadData(option.input_file);
+                // Only parallelize LoadData when warm-start (features locked):
+                // unlocked trie's Insert mutates state and is not thread-safe.
+                const uint32_t nt = option.init_from.empty() ? 1 : option.nthread;
+                model.LoadData(option.input_file, nt);
             }
             model.Sync();
 
