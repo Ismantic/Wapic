@@ -130,12 +130,6 @@ public:
     void SaveBin(std::ostream& file) const;
     // Auto-detect header: #TrieBin# vs #Trie#
     void LoadAuto(std::istream& file);
-    // Same as LoadAuto, but fills id_map: id_map[i] = the ID that file entry i
-    // resolved to in this trie. Useful when loading a binary cache whose obs
-    // IDs were assigned without --init-from: caller can then translate cached
-    // obs IDs to the current trie's IDs. If trie is locked and a string is not
-    // present, id_map[i] is set to -1.
-    void LoadAuto(std::istream& file, std::vector<int64_t>& id_map);
 
     size_t Size() const { return data_.size(); }
     bool SetLock(bool n) {

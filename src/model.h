@@ -131,15 +131,6 @@ public:
         processor_->LockObservations();
     }
 
-    // Inverse of LockFeatures: allow LoadData/LoadDataBinary to extend the
-    // tries (e.g., when warming up from a model whose vocab is a subset of
-    // the new training data). Sync() must be called afterwards to resize
-    // kind_/uoff_/boff_/theta_ for the extended vocabulary.
-    void UnlockFeatures() {
-        processor_->UnlockLabels();
-        processor_->UnlockObservations();
-    }
-
     // Inference-only: free observation strings (kept only for save/export).
     void FreeObservationStrings() {
         processor_->FreeObservationStrings();

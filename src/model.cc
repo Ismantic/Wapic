@@ -34,12 +34,6 @@ void Model::Sync() {
 
     processor_->LockLabels();
     processor_->LockObservations();
-
-    // If the trie grew (e.g., LoadBinary extended it after a warm-start),
-    // the dead-feature masks built at Model::Load time are sized for the old
-    // O. Drop them; weights changed too, so they'd be stale either way.
-    if (static_cast<int64_t>(unigram_dead_.size()) != O) unigram_dead_.clear();
-    if (static_cast<int64_t>(bigram_dead_.size()) != O)  bigram_dead_.clear();
 }
 
 void Model::Save(const std::string& filename, bool binary, bool prune) const {
