@@ -331,6 +331,25 @@ void Trie::LoadAuto(std::istream& file) {
     }
 }
 
+void Trie::LoadAuto(std::istream& file, std::vector<int64_t>& id_map) {
+    std::string line;
+    std::getline(file, line);
+    if (line.find("#TrieBin#") == 0) {
+        int64_t count = std::stoll(line.substr(9));
+        id_map.resize(count);
+        for (int64_t i = 0; i < count; ++i) {
+            id_map[i] = Insert(ReadStrBin(file));
+        }
+    } else {
+        size_t start = line.find("#Trie#") + 6;
+        int64_t count = std::stoll(line.substr(start));
+        id_map.resize(count);
+        for (int64_t i = 0; i < count; ++i) {
+            id_map[i] = Insert(ReadStr(file));
+        }
+    }
+}
+
 
 void Trie::Load(const std::string &filename) {
     std::ifstream file(filename);
@@ -374,22 +393,12 @@ void Trie::BuildDAT() {
     }
     dat_.Build(strs, ids);
 
-    // DAT supersedes the binary tree for lookups. Free its inner Node tree
-    // (data_ Value* are still kept for GetValue(i) inverse lookup).
-    if (root_) {
-        const uint32_t max = 1024;
-        Node* s[max];
-        uint32_t cnt = 0;
-        s[cnt++] = root_;
-        while (cnt != 0) {
-            Node* n = s[--cnt];
-            if (IsValue(n)) continue;  // Value*: kept (still pointed by data_)
-            s[cnt++] = n->data[0];
-            s[cnt++] = n->data[1];
-            delete n;
-        }
-        root_ = nullptr;
-    }
+    // NOTE: previously we freed root_ here (binary tree was redundant with the
+    // DAT for inference). That broke a "lock → unlock → insert" cycle used by
+    // training when warm-starting from an existing model and then loading a
+    // larger binary cache (LoadBinary inserts new obs strings via Insert,
+    // which needs root_). Keep the binary tree alive so SetLock(false) +
+    // Insert continues to work; memory cost is small relative to theta_.
 }
 
 } // namespace wati

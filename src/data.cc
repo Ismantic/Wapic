@@ -22,10 +22,13 @@ Dataset::~Dataset() {
         delete sen;
     }
     if (obs_mmap != nullptr) {
-        munmap(obs_mmap, obs_mmap_size);
-    }
-    if (obs_mmap_fd >= 0) {
-        close(obs_mmap_fd);
+        if (obs_mmap_fd >= 0) {
+            munmap(obs_mmap, obs_mmap_size);
+            close(obs_mmap_fd);
+        } else {
+            // Heap-owned buffer (set by LoadBinary when obs IDs were translated).
+            delete[] static_cast<int32_t*>(obs_mmap);
+        }
     }
 }
 
@@ -386,15 +389,29 @@ Dataset* DataProcessor::LoadBinary(const std::string& prefix) {
     const std::string meta_path = prefix + ".meta.bin";
     const std::string trie_path = prefix + ".trie.txt";
 
-    // Load tries first (small, in RAM)
+    // Load tries first (small, in RAM). Capture id_maps so we can translate
+    // obs IDs from the cache's numbering to the in-memory trie's numbering --
+    // critical when this LoadBinary is called after a model warm-start (--init-from)
+    // because the cache's trie was built without that warm-start and uses a
+    // different ID assignment.
     std::ifstream trie_in(trie_path);
     if (!trie_in) {
         std::cerr << "LoadBinary: cannot open " << trie_path << "\n";
         return nullptr;
     }
-    labels->Load(trie_in);
-    observations->Load(trie_in);
+    std::vector<int64_t> label_id_map, obs_id_map;
+    labels->LoadAuto(trie_in, label_id_map);
+    observations->LoadAuto(trie_in, obs_id_map);
     trie_in.close();
+
+    bool obs_needs_translation = false;
+    for (size_t i = 0; i < obs_id_map.size(); ++i) {
+        if (obs_id_map[i] != static_cast<int64_t>(i)) { obs_needs_translation = true; break; }
+    }
+    bool label_needs_translation = false;
+    for (size_t i = 0; i < label_id_map.size(); ++i) {
+        if (label_id_map[i] != static_cast<int64_t>(i)) { label_needs_translation = true; break; }
+    }
 
     // mmap obs
     int fd = open(obs_path.c_str(), O_RDONLY);
@@ -417,10 +434,33 @@ Dataset* DataProcessor::LoadBinary(const std::string& prefix) {
     madvise(mmap_base, sb.st_size, MADV_SEQUENTIAL);
 
     Dataset* data = new Dataset();
-    data->obs_mmap = mmap_base;
-    data->obs_mmap_size = sb.st_size;
-    data->obs_mmap_fd = fd;
-    const int32_t* obs_base = reinterpret_cast<const int32_t*>(mmap_base);
+
+    // If obs IDs need translation, copy mmap into a heap buffer and remap.
+    // (We can't write back into MAP_PRIVATE pages without making them dirty,
+    // so just allocate a separate writable buffer.)
+    if (obs_needs_translation) {
+        const size_t n_ints = sb.st_size / sizeof(int32_t);
+        std::cerr << "LoadBinary: translating " << n_ints
+                  << " obs IDs (init-from trie != cache trie) ..." << std::flush;
+        int32_t* translated = new int32_t[n_ints];
+        const int32_t* src = reinterpret_cast<const int32_t*>(mmap_base);
+        for (size_t i = 0; i < n_ints; ++i) {
+            int32_t id = src[i];
+            translated[i] = (id >= 0 && static_cast<size_t>(id) < obs_id_map.size())
+                            ? static_cast<int32_t>(obs_id_map[id]) : -1;
+        }
+        munmap(mmap_base, sb.st_size);
+        close(fd);
+        data->obs_mmap = translated;
+        data->obs_mmap_size = sb.st_size;
+        data->obs_mmap_fd = -1;   // mark as heap-owned (free with delete[])
+        std::cerr << " done.\n";
+    } else {
+        data->obs_mmap = mmap_base;
+        data->obs_mmap_size = sb.st_size;
+        data->obs_mmap_fd = fd;
+    }
+    const int32_t* obs_base = reinterpret_cast<const int32_t*>(data->obs_mmap);
 
     // Read meta
     std::ifstream meta_in(meta_path, std::ios::binary);
@@ -448,6 +488,13 @@ Dataset* DataProcessor::LoadBinary(const std::string& prefix) {
         sen->pos.resize(pos_count);
         meta_in.read(reinterpret_cast<char*>(sen->pos.data()),
                      static_cast<std::streamsize>(pos_count * sizeof(Sentence::Pos)));
+        if (label_needs_translation) {
+            for (uint32_t i = 0; i < pos_count; ++i) {
+                int32_t l = sen->pos[i].label;
+                sen->pos[i].label = (l >= 0 && static_cast<size_t>(l) < label_id_map.size())
+                                    ? static_cast<int32_t>(label_id_map[l]) : -1;
+            }
+        }
         sen->obs_external = obs_base + obs_off;
         sen->uni_stride = us;
         sen->bi_stride  = bs;

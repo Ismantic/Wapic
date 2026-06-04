@@ -84,8 +84,11 @@ int main(int argc, char* argv[]) {
                 std::cerr << "Warm-start: loading " << option.init_from
                           << " ..." << std::flush;
                 model.Load(option.init_from);
-                model.LockFeatures();
-                std::cerr << " done. (features locked, will continue from these weights)\n";
+                // Model::Load -> Sync -> Lock* already locked the tries. With
+                // --from-bin we want LoadBinary to be able to extend them, so
+                // re-unlock; Sync() at the end of FIT will relock.
+                if (option.from_binary) model.UnlockFeatures();
+                std::cerr << " done.\n";
             }
             if (option.from_binary) {
                 model.LoadDataBinary(option.input_file);

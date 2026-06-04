@@ -60,6 +60,12 @@ public:
     void LockObservations() {
         observations->SetLock(true);
     }
+    void UnlockLabels() {
+        labels->SetLock(false);
+    }
+    void UnlockObservations() {
+        observations->SetLock(false);
+    }
 
     // Inference-only: drop obs trie's value strings (saves ~hundreds of MB on
     // large models). Lookups still work via DAT; GetObservationStr(i) becomes
