@@ -6,6 +6,7 @@ build/
 *.crf
 !data/*.crf
 Wapiti.md
+data/model/
 
 # Intermediate experiment models (only release model is tracked)
 data/exp_*.wac
