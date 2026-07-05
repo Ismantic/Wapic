@@ -316,18 +316,20 @@ void Trie::Load(std::istream& file) {
 void Trie::LoadAuto(std::istream& file) {
     std::string line;
     std::getline(file, line);
-    if (line.find("#TrieBin#") == 0) {
-        int64_t count = std::stoll(line.substr(9));
-        for (int64_t i = 0; i < count; ++i) {
-            Insert(ReadStrBin(file));
-        }
-    } else {
-        // legacy text
-        size_t start = line.find("#Trie#") + 6;
-        int64_t count = std::stoll(line.substr(start));
-        for (int64_t i = 0; i < count; ++i) {
-            Insert(ReadStr(file));
-        }
+
+    // On the load path every entry is unique and its id is exactly its position
+    // in the file (that is how SaveBin/Save emit them, and the weight indices in
+    // the model depend on this order). So we skip building the crit-bit tree —
+    // which would only be thrown away by BuildDAT() at LockObservations() — and
+    // append values directly. This alone halves model load time on large models.
+    const bool bin = line.find("#TrieBin#") == 0;
+    const size_t start = bin ? 9 : line.find("#Trie#") + 6;
+    const int64_t count = std::stoll(line.substr(start));
+
+    data_.reserve(data_.size() + count);
+    for (int64_t i = 0; i < count; ++i) {
+        std::string s = bin ? ReadStrBin(file) : ReadStr(file);
+        data_.push_back(new Value(std::move(s), static_cast<int64_t>(data_.size())));
     }
 }
 

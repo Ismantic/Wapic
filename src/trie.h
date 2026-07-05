@@ -88,6 +88,7 @@ private:
         std::string value;
 
         Value(const std::string& v, int64_t i) : i(i), value(v) {}
+        Value(std::string&& v, int64_t i) : i(i), value(std::move(v)) {}
     };
 
     static Node* ValueToNode(Value* v) {
