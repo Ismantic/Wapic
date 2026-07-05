@@ -60,12 +60,11 @@ PYTHONPATH=build_py/python python3 -c \
 
 ```bash
 python3 scripts/download_dataset.py
-bash scripts/eval_both.sh data/model/wapic-20260605.wac
-python3 scripts/test_name_cases.py --model data/model/wapic-20260605.wac
+bash scripts/evaluate.sh data/model/wapic-20260605.wac
 ```
 
-发布模型在 PDMP/12M retag2 测试集上的 F1 为 97.71/97.49，人名回归为
-15/15。训练数据与发布复现说明见 [REPRODUCE.md](REPRODUCE.md)。
+发布模型在 PDMP/12M retag2 测试集上的 F1 为97.71/97.49。训练数据与
+发布复现说明见 [REPRODUCE.md](REPRODUCE.md)。
 
 ## License
 

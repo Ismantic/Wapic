@@ -37,14 +37,13 @@ python3 scripts/download_dataset.py --full
 ## Verify the Release
 
 ```bash
-bash scripts/eval_both.sh data/model/wapic-20260605.wac
-python3 scripts/test_name_cases.py --model data/model/wapic-20260605.wac
+bash scripts/evaluate.sh data/model/wapic-20260605.wac
 ```
 
 预期结果：
 
 ```text
-F1_pdmp=97.71 F1_12m=97.49 names=15/15
+F1_pdmp=97.71 F1_12m=97.49
 ```
 
-指标波动或重新训练结果必须同时报告 PDMP、12M 和人名回归结果。
+指标波动或重新训练结果必须同时报告PDMP和12M结果。

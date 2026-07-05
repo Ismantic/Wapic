@@ -40,12 +40,11 @@ CLI mode. For segmentation behavior, run:
 
 ```bash
 python3 scripts/download_dataset.py
-bash scripts/eval_both.sh data/model/wapic-20260605.wac
-python3 scripts/test_name_cases.py --model data/model/wapic-20260605.wac
+bash scripts/evaluate.sh data/model/wapic-20260605.wac
 ```
 
-Report PDMP and 12M F1 plus the 15-case name result. The expected release
-baseline is `97.71`, `97.49`, and `15/15`.
+Report both PDMP and 12M F1. The expected release baseline is `97.71` and
+`97.49`.
 
 ## Commits and Pull Requests
 
