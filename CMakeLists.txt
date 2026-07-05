@@ -29,9 +29,17 @@ target_link_libraries(wapic PRIVATE wapic_lib)
 # Python binding (optional; build with -DWAPIC_PYTHON=ON)
 option(WAPIC_PYTHON "Build Python binding via pybind11" OFF)
 if(WAPIC_PYTHON)
+    set(PYBIND11_FINDPYTHON ON)
+    find_package(Python COMPONENTS Interpreter Development.Module REQUIRED)
     find_package(pybind11 CONFIG REQUIRED)
     pybind11_add_module(_core src/python_binding.cc)
     target_link_libraries(_core PRIVATE wapic_lib)
+    set(WAPIC_PYTHON_PACKAGE_DIR "${CMAKE_BINARY_DIR}/python/wapic")
     set_target_properties(_core PROPERTIES
-        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/python/wapic")
+        LIBRARY_OUTPUT_DIRECTORY "${WAPIC_PYTHON_PACKAGE_DIR}")
+    file(MAKE_DIRECTORY "${WAPIC_PYTHON_PACKAGE_DIR}")
+    configure_file(
+        "${CMAKE_CURRENT_SOURCE_DIR}/python/wapic/__init__.py"
+        "${WAPIC_PYTHON_PACKAGE_DIR}/__init__.py"
+        COPYONLY)
 endif()

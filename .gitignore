@@ -1,116 +1,33 @@
 # Build outputs
-build/
+/build*/
+/cmake-build-*/
+*.a
 *.o
-
-# Model outputs (allow data/*.crf and release model)
-*.crf
-!data/*.crf
-Wapiti.md
-data/model/
-
-# Intermediate experiment models (only release model is tracked)
-data/exp_*.wac
-data/wapic-20260601-h1*.wac
-data/wapic-20260529.wac
-data/all12m_compact_v2.wac
-
-# Large training corpus & caches
-data/all12m_train.txt
-data/all_train.txt
-data/all_smaller.txt
-data/*.meta.bin
-data/*.obs.bin
-data/*.trie.txt
-data/all12m_test*.txt
-data/news_test*.txt
-data/pd_test*.txt
-data/pd_modern*.txt
-data/pd3m_*.txt
-data/pd_train.txt
-
-# Large derived data
-data/anchor_*.txt
-data/opennews_nh_*train.txt
-data/opennews_start3_train.txt
-data/opennh_*.txt
-data/clean_aug_train.txt
-data/foreign_dot_*.txt
-data/threechar_zh_train.txt
-data/raw/
-
-# Intermediate concat datasets
-data/h*_*.txt
-data/combined_*.txt
-data/badcases_h23*.jsonl
-data/badcases_h23_full.txt
-data/badcases_h23_still_fail.txt
-data/badcases_release.jsonl
-data/badcases_release_clean*
-data/badcases_v3.jsonl
-data/antimerge*.txt
-data/antimerge_v2*.txt
-data/name_aug_v2_train.txt
-data/hardcase_train.txt
-data/all12m.wac
-
-# Logs
-logs/
-experiments/log_*.txt
-experiments/batch_*_console.log
-experiments/chain_*.log
-experiments/resume_clean.log
-experiments/dual_eval.log
-nohup.out
-logs_*.txt
-logs_*.md
-
-# Misc large
-data/news_*.txt
-data/all_*.wac
-data/pd_train_bin.trie.txt
-data/news_1m5_bin.trie.txt
-data/all_*_bin.*
-
-# Editor / OS
-.claude/
-.vscode/
-.DS_Store
-
-# Files generated during experiments
-data/all12m_test_result.txt
-data/pd_test_result.txt
-data/all12m_train.txt
-
-# Sweep / old experiment models
-data/sweep_*.wac
-
-# OLD / typed intermediate versions
-data/*_OLD.txt
-data/*_typed.txt
-data/pd_mp_type_pred.txt
-data/pattern_wide.txt
-data/stage1_*.txt
-data/pd_aug*.txt
-
-# Older eval versions (kept latest only)
-data/badcase_eval.jsonl
-data/foreign_dot_1plus.jsonl
-
-# Old experimental release models (not used by current release)
-data/v4.wac
-data/v4_stage2.wac
-data/v5_stage3.wac
-data/wapic_*.wac
+*.so
 
 # Python
 __pycache__/
 *.pyc
+.venv/
 
-# Batch test results
-data/all12m_test_result.txt
+# Models, datasets, and generated training artifacts
+/data/*
+!/data/pattern.txt
+/hf_upload/
 
-# experiments logs (keep results.log and run_batch*.sh)
-experiments/batch*.log
-experiments/chain_*.log
-experiments/resume_*.log
-experiments/dual_eval.log
+# Historical experiments and logs
+/experiments/
+/logs/
+*.log
+logs_*.txt
+logs_*.md
+nohup.out
+
+# Local duplicate checkout
+/Wapic-clean/
+
+# Editors and operating systems
+.DS_Store
+.vscode/
+.idea/
+.claude/

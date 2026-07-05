@@ -4,7 +4,7 @@ For each (name, sentences) pair, runs wapic on each sentence and reports
 whether the name was kept as a single token.
 
 Usage:
-    python scripts/test_name_cases.py --model data/wapic_v2_stage2.wac
+    python3 scripts/test_name_cases.py --model data/model/wapic-20260605.wac
 """
 import argparse
 import subprocess
@@ -59,38 +59,46 @@ def run_wapic(model, sentences, wapic_bin="./build/wapic"):
                 f.write(ch + "\n")
             f.write("\n")
     out_path = in_path + ".out"
-    subprocess.run([wapic_bin, "test", "-m", model, in_path, out_path],
-                   check=True, capture_output=True)
-    results = []
-    cur_tags = []
-    sent_idx = 0
-    with open(out_path, "r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if line.startswith("score="):
-                continue
-            if not line:
-                if cur_tags:
-                    results.append(tags_to_words(sentences[sent_idx], cur_tags))
-                    sent_idx += 1
-                    cur_tags = []
-                continue
-            cur_tags.append(line.split()[0])
-    if cur_tags:
-        results.append(tags_to_words(sentences[sent_idx], cur_tags))
-    os.unlink(in_path); os.unlink(out_path)
-    return results
+    try:
+        subprocess.run(
+            [wapic_bin, "test", "-m", model, in_path, out_path],
+            check=True,
+            capture_output=True,
+        )
+        results = []
+        cur_tags = []
+        sent_idx = 0
+        with open(out_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith("score="):
+                    continue
+                if not line:
+                    if cur_tags:
+                        results.append(tags_to_words(sentences[sent_idx], cur_tags))
+                        sent_idx += 1
+                        cur_tags = []
+                    continue
+                cur_tags.append(line.split()[0])
+        if cur_tags:
+            results.append(tags_to_words(sentences[sent_idx], cur_tags))
+        return results
+    finally:
+        for path in (in_path, out_path):
+            if os.path.exists(path):
+                os.unlink(path)
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", required=True)
+    ap.add_argument("--wapic", default="./build/wapic")
     args = ap.parse_args()
 
     total = ok = 0
     for name, sents in CASES:
         print(f"\n=== {name} ({len(sents)} sentences) ===")
-        results = run_wapic(args.model, sents)
+        results = run_wapic(args.model, sents, args.wapic)
         name_ok = 0
         for sent, words in zip(sents, results):
             kept = name in words

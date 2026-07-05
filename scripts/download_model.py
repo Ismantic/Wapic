@@ -42,7 +42,7 @@ def main():
     except ImportError:
         print(
             "Missing dependency: install it with "
-            "`python3 -m pip install huggingface_hub`.",
+            "`uv pip install huggingface_hub`.",
             file=sys.stderr,
         )
         return 1
