@@ -64,8 +64,7 @@ python3 scripts/test.py data/model/wapic-cws.wac
 ```
 
 发布模型在 PDMP/12M retag2 测试集上的 F1 为97.70/97.48。完整训练数据与两阶段
-warm-start 配方见数据集仓库
-[`RELEASE_TRAINING_DATA.md`](https://huggingface.co/datasets/Ismantic/wapic-cws-data/blob/main/RELEASE_TRAINING_DATA.md)。
+warm-start 配方见数据集仓库 [Ismantic/wapic-cws-data](https://huggingface.co/datasets/Ismantic/wapic-cws-data)。
 
 ## 训练自己的模型
 
