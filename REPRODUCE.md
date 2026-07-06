@@ -43,7 +43,7 @@ bash scripts/evaluate.sh data/model/wapic-cws.wac
 预期结果：
 
 ```text
-F1_pdmp=97.71 F1_12m=97.49
+F1_pdmp=97.70 F1_12m=97.48
 ```
 
 指标波动或重新训练结果必须同时报告PDMP和12M结果。

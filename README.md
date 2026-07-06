@@ -63,7 +63,7 @@ python3 scripts/download_dataset.py
 bash scripts/evaluate.sh data/model/wapic-cws.wac
 ```
 
-发布模型在 PDMP/12M retag2 测试集上的 F1 为97.71/97.49。训练数据与
+发布模型在 PDMP/12M retag2 测试集上的 F1 为97.70/97.48。训练数据与
 发布复现说明见 [REPRODUCE.md](REPRODUCE.md)。
 
 ## License
