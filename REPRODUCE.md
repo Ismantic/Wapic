@@ -24,14 +24,14 @@ warm-start 顺序。
 cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 uv pip install huggingface_hub
-python3 scripts/download_model.py
-python3 scripts/download_dataset.py
+python3 scripts/download.py model
+python3 scripts/download.py data
 ```
 
-`download_dataset.py` 默认只下载评估所需文件。需要完整训练包时运行：
+`download.py data` 默认只下载评估所需文件。需要完整训练包时运行：
 
 ```bash
-python3 scripts/download_dataset.py --full
+python3 scripts/download.py data --full
 ```
 
 ## Verify the Release

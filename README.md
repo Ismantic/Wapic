@@ -23,7 +23,7 @@ cmake --build build
 
 ```bash
 uv pip install huggingface_hub
-python3 scripts/download_model.py
+python3 scripts/download.py model
 ```
 
 模型默认保存到 `data/model/wapic-cws.wac`。
@@ -59,7 +59,7 @@ PYTHONPATH=build_py/python python3 -c \
 ## 评估
 
 ```bash
-python3 scripts/download_dataset.py
+python3 scripts/download.py data
 bash scripts/evaluate.sh data/model/wapic-cws.wac
 ```
 

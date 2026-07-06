@@ -17,7 +17,7 @@ Models and datasets live on Hugging Face, not in Git. Downloaded files under
 ```bash
 cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build
-python3 scripts/download_model.py
+python3 scripts/download.py model
 ./build/wapic -m data/model/wapic-cws.wac
 ```
 
@@ -39,7 +39,7 @@ After C++ changes, build from a clean CMake directory and exercise the affected
 CLI mode. For segmentation behavior, run:
 
 ```bash
-python3 scripts/download_dataset.py
+python3 scripts/download.py data
 bash scripts/evaluate.sh data/model/wapic-cws.wac
 ```
 
