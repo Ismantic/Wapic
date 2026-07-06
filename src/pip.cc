@@ -4,9 +4,9 @@
 // Usage:
 //   import wapic
 //   seg = wapic.Segmenter("model.wac")
-//   words = seg.cut("中华人民共和国是一个伟大的国家")
+//   words = seg.segment("中华人民共和国是一个伟大的国家")
 //   tags  = seg.tag("中华人民共和国是一个伟大的国家")  # list[(char, "B/M/E/S")]
-//   batch = seg.cut_batch(["第一句", "第二句"])
+//   batch = seg.segment_batch(["第一句", "第二句"])
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
@@ -88,15 +88,15 @@ public:
         return {chars, tags};
     }
 
-    // Cut with pre-segmentation (default): split raw text into runs, send only
-    // Han runs to the CRF; latin/digit/punctuation become tokens directly. This
-    // matches the retag2 tokenization the model was trained on.
-    std::vector<std::string> cut(const std::string& text) {
+    // Segment with pre-segmentation (default): split raw text into runs, send
+    // only Han runs to the CRF; latin/digit/punctuation become tokens directly.
+    // This matches the retag2 tokenization the model was trained on.
+    std::vector<std::string> segment(const std::string& text) {
         std::vector<std::string> out;
         for (const auto& run : wati::PreSegment(text)) {
             if (run.type == wati::RunType::Space) continue;  // word boundary
             if (run.type == wati::RunType::Han) {
-                for (auto& w : cut_raw(run.text)) out.push_back(std::move(w));
+                for (auto& w : segment_raw(run.text)) out.push_back(std::move(w));
             } else {
                 out.push_back(run.text);  // latin / digit / punct token
             }
@@ -104,9 +104,9 @@ public:
         return out;
     }
 
-    // Raw char-level cut: hand the whole string to the CRF one char at a time,
-    // no pre-segmentation. Kept for callers needing the training-columnar path.
-    std::vector<std::string> cut_raw(const std::string& text) {
+    // Raw char-level segmentation: hand the whole string to the CRF one char at
+    // a time, no pre-segmentation. For callers needing the training-columnar path.
+    std::vector<std::string> segment_raw(const std::string& text) {
         auto [chars, tags] = tag(text);
         std::vector<std::string> words;
         std::string cur;
@@ -124,10 +124,10 @@ public:
     }
 
     std::vector<std::vector<std::string>>
-    cut_batch(const std::vector<std::string>& texts) {
+    segment_batch(const std::vector<std::string>& texts) {
         std::vector<std::vector<std::string>> out;
         out.reserve(texts.size());
-        for (const auto& t : texts) out.push_back(cut(t));
+        for (const auto& t : texts) out.push_back(segment(t));
         return out;
     }
 
@@ -143,21 +143,6 @@ public:
         }
         starts.push_back((int)chars.size());
         return starts;
-    }
-
-    // cut_smart: kept for backward compatibility. The pre-segmentation logic it
-    // used to carry now lives in cut()/PreSegment (proper Unicode classification,
-    // punctuation and CN/EN/digit boundaries), so this just delegates.
-    std::vector<std::string> cut_smart(const std::string& text) {
-        return cut(text);
-    }
-
-    std::vector<std::vector<std::string>>
-    cut_smart_batch(const std::vector<std::string>& texts) {
-        std::vector<std::vector<std::string>> out;
-        out.reserve(texts.size());
-        for (const auto& t : texts) out.push_back(cut_smart(t));
-        return out;
     }
 
     int64_t label_count() const { return model_->LabelCount(); }
@@ -177,25 +162,19 @@ PYBIND11_MODULE(_core, m) {
     py::class_<Segmenter>(m, "Segmenter")
         .def(py::init<const std::string&>(), py::arg("model_path"),
              "Load a Wapic CRF model from disk.")
-        .def("cut", &Segmenter::cut, py::arg("text"),
+        .def("segment", &Segmenter::segment, py::arg("text"),
              "Segment a string into list[str]. Pre-segments first (whitespace, "
              "punctuation, CN/EN/digit boundaries); only Han runs go to the CRF.")
-        .def("cut_batch", &Segmenter::cut_batch, py::arg("texts"),
+        .def("segment_batch", &Segmenter::segment_batch, py::arg("texts"),
              "Segment a list of strings, returns list[list[str]].")
-        .def("cut_raw", &Segmenter::cut_raw, py::arg("text"),
-             "Raw char-level CRF cut with NO pre-segmentation (whole string fed "
-             "one char at a time). Matches the training-columnar path.")
+        .def("segment_raw", &Segmenter::segment_raw, py::arg("text"),
+             "Raw char-level CRF segmentation with NO pre-segmentation (whole "
+             "string fed one char at a time). Matches the training-columnar path.")
         .def("tag", &Segmenter::tag, py::arg("text"),
              "Return (chars: list[str], tags: list[str]). BMES tags.")
         .def("word_starts", &Segmenter::word_starts, py::arg("text"),
              "Char indices of word starts, plus final sentinel = len(chars). "
              "Useful for WWM mask building.")
-        .def("cut_smart", &Segmenter::cut_smart, py::arg("text"),
-             "Smart cut for mixed CN/EN: split by whitespace first; "
-             "全英文 segment 整体 1 word(不让 wapic 切散),含中文 segment 用 CRF 切。"
-             "适用 BERT WWM 数据 prep 等 LLM pretrain scenario。")
-        .def("cut_smart_batch", &Segmenter::cut_smart_batch, py::arg("texts"),
-             "Batch version of cut_smart.")
         .def_property_readonly("label_count", &Segmenter::label_count)
         .def_property_readonly("feature_count", &Segmenter::feature_count);
 }

@@ -59,7 +59,7 @@ pip install git+https://github.com/Ismantic/Wapic.git
 ```python
 import wapic
 seg = wapic.Segmenter("data/model/wapic-cws.wac")
-print(seg.cut("中华人民共和国是一个伟大的国家"))
+print(seg.segment("中华人民共和国是一个伟大的国家"))
 # ['中华人民共和国', '是', '一个', '伟大', '的', '国家']
 ```
 
@@ -70,7 +70,7 @@ uv pip install pybind11
 cmake -B build_py -DWAPIC_PYTHON=ON -DCMAKE_BUILD_TYPE=Release \
   -Dpybind11_DIR="$(python3 -m pybind11 --cmakedir)"
 cmake --build build_py
-PYTHONPATH=build_py/python python3 -c 'import wapic; print(wapic.Segmenter("data/model/wapic-cws.wac").cut("中华人民共和国"))'
+PYTHONPATH=build_py/python python3 -c 'import wapic; print(wapic.Segmenter("data/model/wapic-cws.wac").segment("中华人民共和国"))'
 ```
 
 ## 评估
