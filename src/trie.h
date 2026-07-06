@@ -101,7 +101,7 @@ private:
         return reinterpret_cast<uintptr_t>(n) & 1;
     }
 
-    Node* root_;
+    Node* root_ = nullptr;
     std::vector<Value*> data_;
     bool is_lock_;
 
