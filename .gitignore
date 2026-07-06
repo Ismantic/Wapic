@@ -13,6 +13,7 @@ __pycache__/
 # Models, datasets, and generated training artifacts
 /data/*
 !/data/pattern.txt
+!/data/PeopleDaily1998.zip
 /hf_upload/
 
 # Historical experiments and logs

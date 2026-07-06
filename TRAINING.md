@@ -14,14 +14,13 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 ```
 
-## 1. 获取原始语料
+## 1. 解压原始语料
 
-原始 PFR 语料（`词/词性`）来自公开仓库，下载 1998 年 1–6 月的六个文件放进 `data/`：
+仓库自带人民日报 1998 标注语料（PFR 格式 `词/词性`）：`data/PeopleDaily1998.zip`。
+解压 1–6 月的六个文件到 `data/`：
 
 ```bash
-git clone --depth 1 https://github.com/chenhui-bupt/PeopleDaily1998.git /tmp/pd1998
-unzip -o /tmp/pd1998/199801.zip -d /tmp/pd1998
-cp /tmp/pd1998/199801/1998{01,02,03,04,05,06}.txt data/
+unzip -j data/PeopleDaily1998.zip '199801/1998*.txt' -d data/
 ```
 
 每行是一个段落，形如：
@@ -30,7 +29,9 @@ cp /tmp/pd1998/199801/1998{01,02,03,04,05,06}.txt data/
 19980101-01-001-001/m  迈向/v  充满/v  希望/n  的/u  新/a  世纪/n  ...
 ```
 
-> `data/` 已在 `.gitignore` 中（除 `pattern.txt`），这些数据只留在本地、不入库。
+> 语料来源：PFR 语料库（北京大学计算语言学研究所 + 富士通研究开发中心，经人民日报社
+> 许可制作），仅供研究复现使用，版权归原作者所有。解压出的 `1998*.txt` 及后续生成的
+> jsonl / BMES 文件都在 `.gitignore` 中（仅 `pattern.txt` 与语料 zip 入库），不占用仓库。
 
 ## 2. PFR → `{source, cut}` jsonl
 
