@@ -61,6 +61,9 @@ import wapic
 seg = wapic.Segmenter("data/model/wapic-cws.wac")
 print(seg.segment("中华人民共和国是一个伟大的国家"))
 # ['中华人民共和国', '是', '一个', '伟大', '的', '国家']
+
+# 批量：多核并行（释放 GIL），大语料吞吐 ~Nx
+results = seg.segment_batch(["第一句", "第二句", ...])
 ```
 
 开发时也可源码构建后用 `PYTHONPATH` 直接引用：

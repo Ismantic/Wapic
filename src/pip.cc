@@ -46,24 +46,71 @@ public:
         model_->FreeObservationStrings();
     }
 
-    // Get all chars + BMES tags for one text.
-    // Returns (chars, tags). On empty input, returns ({}, {}).
+    // Get all chars + BMES tags for one text. (chars, tags); ({},{}) if empty.
     std::pair<std::vector<std::string>, std::vector<std::string>>
     tag(const std::string& text) {
+        std::lock_guard<std::mutex> lock(mtx_);
+        return tag_with(text, *scorer_);
+    }
+
+    // Segment with pre-segmentation (default): split raw text into runs, send
+    // only Han runs to the CRF; latin/digit/punctuation become tokens directly.
+    std::vector<std::string> segment(const std::string& text) {
+        std::lock_guard<std::mutex> lock(mtx_);
+        return segment_with(text, *scorer_);
+    }
+
+    // Raw char-level segmentation: whole string to the CRF one char at a time,
+    // no pre-segmentation. For callers needing the training-columnar path.
+    std::vector<std::string> segment_raw(const std::string& text) {
+        std::lock_guard<std::mutex> lock(mtx_);
+        return segment_raw_with(text, *scorer_);
+    }
+
+    // Segment many texts in parallel: one Scorer per thread, GIL released.
+    // Safe because the loaded model is locked (DAT lookups are read-only) and
+    // each text is independent.
+    std::vector<std::vector<std::string>>
+    segment_batch(const std::vector<std::string>& texts) {
+        std::vector<std::vector<std::string>> out(texts.size());
+        const int B = static_cast<int>(texts.size());
+        py::gil_scoped_release nogil;
+        #pragma omp parallel
+        {
+            wati::Scorer local(model_.get());   // per-thread scoring buffers
+            #pragma omp for schedule(dynamic, 16)
+            for (int i = 0; i < B; i++)
+                out[i] = segment_with(texts[i], local);
+        }
+        return out;
+    }
+
+    // Word boundaries (char-level start indices of each word, + final length).
+    // Suited for WWM mask: zip with chars to know "is this char a word start".
+    std::vector<int> word_starts(const std::string& text) {
+        std::lock_guard<std::mutex> lock(mtx_);
+        auto [chars, tags] = tag_with(text, *scorer_);
+        std::vector<int> starts;
+        size_t n = std::min(chars.size(), tags.size());
+        for (size_t i = 0; i < n; i++) {
+            if (tags[i] == "B" || tags[i] == "S") starts.push_back((int)i);
+        }
+        starts.push_back((int)chars.size());
+        return starts;
+    }
+
+    // ---- Per-scorer cores (no lock). Run concurrently with a thread-local
+    //      scorer: only const/read-only Segmenter state is touched. ----
+    std::pair<std::vector<std::string>, std::vector<std::string>>
+    tag_with(const std::string& text, wati::Scorer& scorer) {
         auto chars = wati::Utf8Chars(text);
         std::vector<std::string> tags;
         if (chars.empty()) return {chars, tags};
         tags.reserve(chars.size());
 
-        // Single-threaded scorer access: use one mutex per Segmenter.
-        // CRF Viterbi mutates scorer internal buffers, so concurrent calls
-        // on the same instance must serialize.
-        std::lock_guard<std::mutex> lock(mtx_);
-
         const size_t kChunk = 1024;
         for (size_t start = 0; start < chars.size(); start += kChunk) {
             size_t end = std::min(start + kChunk, chars.size());
-            // Build RawStrs directly (skip string buffer + istringstream).
             wati::RawStrs raw;
             raw.strs.reserve(end - start);
             for (size_t i = start; i < end; i++) raw.strs.push_back(chars[i]);
@@ -73,7 +120,7 @@ public:
                 continue;
             }
             std::vector<int64_t> labels;
-            scorer_->Viterbi(*sen, labels);
+            scorer.Viterbi(*sen, labels);
             for (size_t t = 0; t < labels.size() && (start + t) < end; t++) {
                 int64_t li = labels[t];
                 if (li >= 0 && (size_t)li < label_strs_.size())
@@ -81,68 +128,40 @@ public:
                 else
                     tags.push_back("S");
             }
-            // Pad with S if Viterbi returned fewer than expected.
             while (tags.size() < end) tags.push_back("S");
             delete sen;
         }
         return {chars, tags};
     }
 
-    // Segment with pre-segmentation (default): split raw text into runs, send
-    // only Han runs to the CRF; latin/digit/punctuation become tokens directly.
-    // This matches the retag2 tokenization the model was trained on.
-    std::vector<std::string> segment(const std::string& text) {
-        std::vector<std::string> out;
-        for (const auto& run : wati::PreSegment(text)) {
-            if (run.type == wati::RunType::Space) continue;  // word boundary
-            if (run.type == wati::RunType::Han) {
-                for (auto& w : segment_raw(run.text)) out.push_back(std::move(w));
-            } else {
-                out.push_back(run.text);  // latin / digit / punct token
-            }
-        }
-        return out;
-    }
-
-    // Raw char-level segmentation: hand the whole string to the CRF one char at
-    // a time, no pre-segmentation. For callers needing the training-columnar path.
-    std::vector<std::string> segment_raw(const std::string& text) {
-        auto [chars, tags] = tag(text);
+    std::vector<std::string> segment_raw_with(const std::string& text,
+                                              wati::Scorer& scorer) {
+        auto [chars, tags] = tag_with(text, scorer);
         std::vector<std::string> words;
         std::string cur;
         size_t n = std::min(chars.size(), tags.size());
         for (size_t i = 0; i < n; i++) {
             cur += chars[i];
             const std::string& t = tags[i];
-            if (t == "E" || t == "S") {
-                words.push_back(cur);
-                cur.clear();
-            }
+            if (t == "E" || t == "S") { words.push_back(cur); cur.clear(); }
         }
         if (!cur.empty()) words.push_back(cur);
         return words;
     }
 
-    std::vector<std::vector<std::string>>
-    segment_batch(const std::vector<std::string>& texts) {
-        std::vector<std::vector<std::string>> out;
-        out.reserve(texts.size());
-        for (const auto& t : texts) out.push_back(segment(t));
-        return out;
-    }
-
-    // Word boundaries (char-level start indices of each word, + final length).
-    // Suited for WWM mask: zip with chars to know "is this char a word start".
-    std::vector<int> word_starts(const std::string& text) {
-        auto [chars, tags] = tag(text);
-        std::vector<int> starts;
-        size_t n = std::min(chars.size(), tags.size());
-        for (size_t i = 0; i < n; i++) {
-            const std::string& t = tags[i];
-            if (t == "B" || t == "S") starts.push_back((int)i);
+    std::vector<std::string> segment_with(const std::string& text,
+                                          wati::Scorer& scorer) {
+        std::vector<std::string> out;
+        for (const auto& run : wati::PreSegment(text)) {
+            if (run.type == wati::RunType::Space) continue;
+            if (run.type == wati::RunType::Han) {
+                for (auto& w : segment_raw_with(run.text, scorer))
+                    out.push_back(std::move(w));
+            } else {
+                out.push_back(run.text);
+            }
         }
-        starts.push_back((int)chars.size());
-        return starts;
+        return out;
     }
 
     int64_t label_count() const { return model_->LabelCount(); }
@@ -166,7 +185,9 @@ PYBIND11_MODULE(_core, m) {
              "Segment a string into list[str]. Pre-segments first (whitespace, "
              "punctuation, CN/EN/digit boundaries); only Han runs go to the CRF.")
         .def("segment_batch", &Segmenter::segment_batch, py::arg("texts"),
-             "Segment a list of strings, returns list[list[str]].")
+             "Segment a list of strings in parallel (one thread per core, GIL "
+             "released), returns list[list[str]]. Same output as calling "
+             "segment() on each; ~Nx faster on large batches.")
         .def("segment_raw", &Segmenter::segment_raw, py::arg("text"),
              "Raw char-level CRF segmentation with NO pre-segmentation (whole "
              "string fed one char at a time). Matches the training-columnar path.")
