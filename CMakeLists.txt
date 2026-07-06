@@ -32,7 +32,7 @@ if(WAPIC_PYTHON)
     set(PYBIND11_FINDPYTHON ON)
     find_package(Python COMPONENTS Interpreter Development.Module REQUIRED)
     find_package(pybind11 CONFIG REQUIRED)
-    pybind11_add_module(_core src/python_binding.cc)
+    pybind11_add_module(_core src/pip.cc)
     target_link_libraries(_core PRIVATE wapic_lib)
     set(WAPIC_PYTHON_PACKAGE_DIR "${CMAKE_BINARY_DIR}/python/wapic")
     set_target_properties(_core PROPERTIES
