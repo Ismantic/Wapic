@@ -44,6 +44,9 @@ DataProcessor::~DataProcessor() {
 
 void DataProcessor::LoadPatterns(const std::string &filename) {
     std::ifstream is(filename);
+    if (!is) {
+        throw std::runtime_error("Cannot open pattern file: " + filename);
+    }
     std::string line;
     while (std::getline(is, line)) {
         // Remove comments
@@ -70,23 +73,27 @@ void DataProcessor::LoadPatterns(const std::string &filename) {
                 break;
             default:
                 delete pattern;
-                return;
+                throw std::runtime_error("Invalid pattern: " + line);
         }
 
         patterns.push_back(pattern);
         token_count = std::max(token_count, pattern->TokenNum());
     }
+    if (patterns.empty()) {
+        throw std::runtime_error("Pattern file contains no patterns: " + filename);
+    }
 }
 
 RawStrs* DataProcessor::ReadRawStrs(std::istream& file) const {
-    if (file.eof()) {
+    if (!file) {
         return nullptr;
     }
 
     RawStrs* raw = new RawStrs();
 
-    while (!file.eof()) {
-        std::string line = GetLine(file);
+    std::string source_line;
+    while (std::getline(file, source_line)) {
+        std::string line = TrimLine(source_line);
         if (line.empty()) {
             if (raw->strs.empty()) {
                 continue;
@@ -213,6 +220,16 @@ Dataset* DataProcessor::LoadDataset(std::istream& file, bool e, uint32_t nthread
         return data;
     }
 
+    if (!observations->IsLocked()) {
+        // From-scratch training: the tries are mutable, so Insert must stay
+        // serial. Run two phases per batch (same pattern as BuildBinary):
+        // parallel RawToTokens + Pattern::Execute, then in-order serial trie
+        // inserts. Insertion order matches the serial path exactly, so obs
+        // ids — and any model trained from them — are identical.
+        LoadDatasetUnlocked(file, e, nthread, data);
+        return data;
+    }
+
     // Parallel pipelined path: a single producer thread reads RawStrs into a
     // double-buffer; the main thread runs OpenMP-parallel RawToSentence on the
     // other buffer. Append to dataset is serial but tiny.
@@ -303,8 +320,8 @@ void DataProcessor::BuildBinary(std::istream& file, const std::string& prefix,
     std::ofstream obs_out(obs_path, std::ios::binary);
     std::ofstream meta_out(meta_path, std::ios::binary);
     if (!obs_out || !meta_out) {
-        std::cerr << "BuildBinary: cannot open output files\n";
-        return;
+        throw std::runtime_error("BuildBinary: cannot open output files for prefix " +
+                                 prefix);
     }
 
     // Meta header (rewritten at end with final sentence_count)
@@ -449,6 +466,106 @@ void DataProcessor::BuildBinary(std::istream& file, const std::string& prefix,
               << " GB)" << std::endl;
 }
 
+// From-scratch parallel load (mutable tries). Per batch: parallel RawToTokens
+// + Pattern::Execute (the expensive part), then serial in-order trie inserts.
+// Insertion order — sentence, then position, then pattern — is exactly the
+// serial path's, so observation ids and the resulting model are identical.
+void DataProcessor::LoadDatasetUnlocked(std::istream& file, bool e,
+                                        uint32_t nthread, Dataset* data) {
+    const uint32_t stride = unigram_count + bigram_count;
+    const size_t batch_size = 512;
+    std::vector<RawStrs*> batch;
+    std::vector<PatternedSentence> results;
+    batch.reserve(batch_size);
+    results.reserve(batch_size);
+
+    bool eof = false;
+    while (!eof) {
+        for (auto* r : batch) delete r;
+        batch.clear();
+        results.clear();
+        while (batch.size() < batch_size && !eof) {
+            RawStrs* raw = ReadRawStrs(file);
+            if (!raw) { eof = true; break; }
+            batch.push_back(raw);
+        }
+        if (batch.empty()) break;
+
+        // Phase 1: parallel feature extraction (no shared mutable state).
+        results.resize(batch.size());
+        const int B = static_cast<int>(batch.size());
+        #pragma omp parallel for schedule(static) num_threads(static_cast<int>(nthread))
+        for (int i = 0; i < B; i++) {
+            RawStrs* raw = batch[i];
+            TokenStrs* tos = RawToTokens(raw, e);
+            delete raw;
+            batch[i] = nullptr;
+            if (!tos || tos->Size() == 0) {
+                delete tos;
+                continue;
+            }
+            PatternedSentence& ps = results[i];
+            ps.T = tos->Size();
+            ps.obs.reserve(ps.T * patterns.size());
+            if (!tos->labels.empty()) ps.labels.reserve(ps.T);
+            std::string obs;  // reused across patterns/positions
+            for (uint32_t t = 0; t < ps.T; t++) {
+                for (Pattern* p : patterns) {
+                    p->Execute(*tos, t, obs);
+                    ps.obs.push_back(obs);
+                }
+                if (!tos->labels.empty()) ps.labels.push_back(tos->labels[t]);
+            }
+            delete tos;
+        }
+
+        // Phase 2: serial, in-order inserts + Sentence assembly.
+        for (auto& ps : results) {
+            if (ps.T == 0) continue;
+            const uint32_t T = ps.T;
+            Sentence* sen = new Sentence();
+            sen->pos.resize(T);
+            sen->uni_stride = unigram_count;
+            sen->bi_stride = bigram_count;
+            sen->obs_buffer.assign(static_cast<size_t>(T) * stride, 0);
+            int32_t* buf = sen->obs_buffer.data();
+
+            size_t obs_idx = 0;
+            for (uint32_t t = 0; t < T; t++) {
+                Sentence::Pos& pos = sen->pos[t];
+                int32_t* unigram_current = buf + static_cast<size_t>(t) * stride;
+                int32_t* bigram_current = unigram_current + unigram_count;
+                for (size_t pi = 0; pi < patterns.size(); pi++) {
+                    const std::string& obs = ps.obs[obs_idx++];
+                    int64_t id = observations->Insert(obs);
+                    if (id == -1) continue;
+                    switch (obs[0]) {
+                        case 'u':
+                            *unigram_current++ = static_cast<int32_t>(id);
+                            pos.unigram_count++;
+                            break;
+                        case 'b':
+                            *bigram_current++ = static_cast<int32_t>(id);
+                            pos.bigram_count++;
+                            break;
+                        case '*':
+                            *unigram_current++ = static_cast<int32_t>(id);
+                            *bigram_current++ = static_cast<int32_t>(id);
+                            pos.unigram_count++;
+                            pos.bigram_count++;
+                            break;
+                    }
+                }
+                if (!ps.labels.empty()) {
+                    pos.label = static_cast<int32_t>(labels->Insert(ps.labels[t]));
+                }
+            }
+            data->sens.push_back(sen);
+            data->max_sentence_size = std::max(data->max_sentence_size, T);
+        }
+    }
+}
+
 Dataset* DataProcessor::LoadBinary(const std::string& prefix) {
     const std::string obs_path  = prefix + ".obs.bin";
     const std::string meta_path = prefix + ".meta.bin";
@@ -530,13 +647,21 @@ Dataset* DataProcessor::LoadBinary(const std::string& prefix) {
 
 void DataProcessor::LoadFeatures(std::istream& file) {
     std::string line;
-    std::getline(file, line);
+    if (!std::getline(file, line) || line.rfind("#Patterns#", 0) != 0) {
+        throw std::runtime_error("Invalid model: missing patterns header");
+    }
 
     size_t start = line.find("#Patterns#")+10;
     size_t end = line.find('#', start);
+    if (end == std::string::npos) {
+        throw std::runtime_error("Invalid model: malformed patterns header");
+    }
 
     int pattern_count = std::stoll(line.substr(start, end-start));
     token_count = std::stoll(line.substr(end+1));
+    if (pattern_count <= 0 || pattern_count > 100000 || token_count > 100000) {
+        throw std::runtime_error("Invalid model: pattern metadata out of range");
+    }
     unigram_count = bigram_count = 0;
     if (pattern_count > 0) {
         patterns.clear();

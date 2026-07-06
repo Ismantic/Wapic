@@ -21,7 +21,8 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    switch (option.run_mode) {
+    try {
+        switch (option.run_mode) {
         case wati::RunMode::BUILD: {
             wati::DataProcessor processor;
             processor.LoadPatterns(option.pattern_file);
@@ -71,10 +72,10 @@ int main(int argc, char* argv[]) {
             if (option.from_binary) {
                 model.LoadDataBinary(option.input_file);
             } else {
-                // Only parallelize LoadData when warm-start (features locked):
-                // unlocked trie's Insert mutates state and is not thread-safe.
-                const uint32_t nt = option.init_from.empty() ? 1 : option.nthread;
-                model.LoadData(option.input_file, nt);
+                // LoadDataset dispatches on trie state: warm-start (locked) uses
+                // the fully parallel path; from-scratch (unlocked) parallelizes
+                // feature extraction and keeps trie inserts serial + in-order.
+                model.LoadData(option.input_file, option.nthread);
             }
             model.Sync();
 
@@ -119,6 +120,11 @@ int main(int argc, char* argv[]) {
             break;
         }
         case wati::RunMode::LABEL: {
+            std::ifstream input(option.input_file);
+            if (!input) {
+                throw std::runtime_error("Cannot open input: " + option.input_file);
+            }
+
             wati::Model model(std::make_unique<wati::DataProcessor>());
             model.Load(option.model_file);
             // Inference-only: obs strings won't be needed (DAT handles lookups).
@@ -126,8 +132,10 @@ int main(int argc, char* argv[]) {
 
             wati::Scorer s(&model);
 
-            std::ifstream input(option.input_file);
             std::ofstream output(option.output_file);
+            if (!output) {
+                throw std::runtime_error("Cannot open output: " + option.output_file);
+            }
 
             s.LabelSentences(input, output);
 
@@ -205,6 +213,10 @@ int main(int argc, char* argv[]) {
             }
             break;
         }
+        }
+    } catch (const std::exception& e) {
+        std::cerr << "Error: " << e.what() << "\n";
+        return 1;
     }
 
     return 0;

@@ -5,9 +5,11 @@
 
 #include <vector>
 #include <string>
+#include <string_view>
 #include <memory>
 #include <iostream>
 #include <stdexcept>
+#include <unordered_map>
 
 namespace wati {
 
@@ -108,6 +110,12 @@ private:
     // Inference accelerator (only built when locked & SyncDAT() called).
     DartArray dat_;
 
+    // Training accelerator: string -> id hash index over data_'s stored strings
+    // (string_view keys point into Value::value, which is heap-stable). Insert
+    // consults it before walking the crit-bit tree — the tree walk dominates
+    // from-scratch data loading otherwise. Freed once the trie is locked.
+    std::unordered_map<std::string_view, int64_t> index_;
+
 public:
     Trie() : is_lock_(false) {}
     ~Trie();
@@ -133,6 +141,7 @@ public:
     void LoadAuto(std::istream& file);
 
     size_t Size() const { return data_.size(); }
+    bool IsLocked() const { return is_lock_; }
     bool SetLock(bool n) {
         bool o = is_lock_;
         is_lock_ = n;

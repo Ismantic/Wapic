@@ -18,6 +18,10 @@ private:
     TokenStrs* RawToTokens(const RawStrs* raw, bool e) const;
     Sentence* TokensToSentence(const TokenStrs* tos) const;
     Sentence* GetSentence(std::istream& file, bool e) const;
+    // From-scratch parallel load: parallel feature extraction, serial in-order
+    // trie inserts. Produces the same dataset/ids as the serial path.
+    void LoadDatasetUnlocked(std::istream& file, bool e, uint32_t nthread,
+                             Dataset* data);
 
 public:
     DataProcessor();
@@ -28,8 +32,9 @@ public:
 
     void LoadPatterns(const std::string& filename);
     // nthread > 1 parallelizes per-sentence work (RawToTokens + Pattern::Execute
-    // + trie lookup). Safe only when label/obs tries are locked (warm-start);
-    // caller must enforce. When nthread <= 1, falls back to serial path.
+    // + trie lookup). Dispatches on trie state: locked tries (warm-start) use the
+    // fully parallel pipelined path; unlocked (from-scratch) use parallel feature
+    // extraction with serial in-order inserts. nthread <= 1 is the serial path.
     Dataset* LoadDataset(std::istream& file, bool e, uint32_t nthread = 1);
 
     // Binary cache pipeline: parse text once, write 3 files (<prefix>.obs.bin /

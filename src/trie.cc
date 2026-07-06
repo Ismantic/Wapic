@@ -208,6 +208,14 @@ int64_t Trie::Insert(const std::string& value) {
         return r.found ? static_cast<int64_t>(r.value) : -1;
     }
 
+    // Mutable-phase fast path: hash index over existing entries. Repeated
+    // observations (the vast majority during data loading) return here without
+    // walking the crit-bit tree.
+    if (!is_lock_) {
+        auto it = index_.find(std::string_view(value));
+        if (it != index_.end()) return it->second;
+    }
+
     // Handle empty tree case
     if (data_.empty()) {
         if (is_lock_) return -1;
@@ -215,6 +223,7 @@ int64_t Trie::Insert(const std::string& value) {
         auto v = new Value(value, 0);
         data_.push_back(v);
         root_ = ValueToNode(data_.back());
+        index_.emplace(std::string_view(v->value), v->i);
     }
 
     // Search down the tree
@@ -281,6 +290,7 @@ int64_t Trie::Insert(const std::string& value) {
     *tx = new_node;
 
     data_.push_back(new_value);
+    index_.emplace(std::string_view(new_value->value), new_value->i);
     return new_value->i;
 }
 
@@ -324,16 +334,25 @@ void Trie::Load(std::istream& file) {
 
 void Trie::LoadAuto(std::istream& file) {
     std::string line;
-    std::getline(file, line);
+    if (!std::getline(file, line)) {
+        throw std::runtime_error("Invalid model: missing trie header");
+    }
 
     // On the load path every entry is unique and its id is exactly its position
     // in the file (that is how SaveBin/Save emit them, and the weight indices in
     // the model depend on this order). So we skip building the crit-bit tree —
     // which would only be thrown away by BuildDAT() at LockObservations() — and
     // append values directly. This alone halves model load time on large models.
-    const bool bin = line.find("#TrieBin#") == 0;
-    const size_t start = bin ? 9 : line.find("#Trie#") + 6;
+    const bool bin = line.rfind("#TrieBin#", 0) == 0;
+    const bool text = line.rfind("#Trie#", 0) == 0;
+    if (!bin && !text) {
+        throw std::runtime_error("Invalid model: malformed trie header");
+    }
+    const size_t start = bin ? 9 : 6;
     const int64_t count = std::stoll(line.substr(start));
+    if (count < 0 || count > INT32_MAX) {
+        throw std::runtime_error("Invalid model: trie size out of range");
+    }
 
     data_.reserve(data_.size() + count);
     for (int64_t i = 0; i < count; ++i) {
@@ -351,6 +370,7 @@ void Trie::Load(const std::string &filename) {
 void Trie::FreeValueStrings() {
     // Inference-only: drop Value objects entirely (strings + structs + ptr vec).
     // After this call, GetValue(i) becomes invalid; only DAT lookup works.
+    std::unordered_map<std::string_view, int64_t>().swap(index_);  // views dangle
     for (auto* v : data_) delete v;
     std::vector<Value*>().swap(data_);
 #ifdef __GLIBC__
@@ -361,6 +381,10 @@ void Trie::FreeValueStrings() {
 
 void Trie::BuildDAT() {
     if (!dat_.Empty()) return;  // already built; idempotent
+
+    // Locked from here on: lookups go through the DAT, the training-phase hash
+    // index is no longer needed.
+    std::unordered_map<std::string_view, int64_t>().swap(index_);
 
     // DAT needs the entries sorted by value. Sort an index permutation and hand
     // the builder pointers into data_'s strings rather than copying every string
