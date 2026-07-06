@@ -66,6 +66,12 @@ bash scripts/evaluate.sh data/model/wapic-cws.wac
 发布模型在 PDMP/12M retag2 测试集上的 F1 为97.70/97.48。训练数据与
 发布复现说明见 [REPRODUCE.md](REPRODUCE.md)。
 
+## 训练自己的模型
+
+除了使用发布模型，你也可以按 [TRAINING.md](TRAINING.md) 用公开的人民日报 1998
+语料从零训练一个分词模型（1–5 月训练 / 6 月测试，单机约 3 分钟得到 F1≈97.4）。
+涉及脚本：`scripts/convert.py`（PFR→jsonl）、`scripts/prepare.py`（jsonl→BMES）。
+
 ## License
 
 MIT
