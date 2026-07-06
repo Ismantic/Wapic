@@ -15,7 +15,14 @@ public:
     Pattern(const std::string& p);
     ~Pattern() = default;
 
-    std::string Execute(const TokenStrs& tokens, uint32_t at);
+    // Fill `out` (cleared first) with the feature string; reuse one buffer
+    // across calls to avoid a string allocation per pattern per position.
+    void Execute(const TokenStrs& tokens, uint32_t at, std::string& out);
+    std::string Execute(const TokenStrs& tokens, uint32_t at) {
+        std::string out;
+        Execute(tokens, at, out);
+        return out;
+    }
 
     uint32_t TokenNum() const { return token_num; }
     std::string GetSource() const { return src; }

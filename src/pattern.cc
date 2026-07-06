@@ -139,59 +139,59 @@ Pattern::Pattern(const std::string& p)
     }
 }
 
-std::string Pattern::Execute(const TokenStrs& tokens, uint32_t at) {
+void Pattern::Execute(const TokenStrs& tokens, uint32_t at, std::string& result) {
     static const std::vector<std::string> bval = {"_x-1", "_x-2", "_x-3", "_x-4", "_x-#"};
     static const std::vector<std::string> eval = {"_x+1", "_x+2", "_x+3", "_x+4", "_x+#"};
 
-    std::string result;
-    result.reserve(16);
+    // `result` is caller-owned and reused; clear it (keeps its capacity, so no
+    // reallocation) and append. Feature strings are short and stay in the
+    // string's small buffer (SSO). Resolve each item to a pointer and append
+    // directly, so common %x / literal items copy no intermediate string; only
+    // t/m regex items materialize a temporary.
+    result.clear();
 
-    size_t m = tokens.Size();
-    for (const auto& item: items) {
-        std::string value;
+    const size_t m = tokens.Size();
+    for (const auto& item : items) {
         uint32_t n = 0;
+        const std::string* value = nullptr;   // source bytes for this item
+        std::string tmp;                       // only used by t/m transforms
 
-        if (item.type != 's') {
+        if (item.type == 's') {
+            value = &item.value;
+        } else {
             int pos = item.offset;
             if (item.absolute) {
-                pos = (pos < 0) ? pos + tokens.tokens.size() : pos - 1;
+                pos = (pos < 0) ? pos + static_cast<int>(tokens.tokens.size())
+                                : pos - 1;
             } else {
                 pos += at;
             }
             if (pos < 0) {
-                value = bval[std::min(-pos - 1, 4)];
+                value = &bval[std::min(-pos - 1, 4)];
             } else if (pos >= static_cast<int32_t>(m)) {
-                value = eval[std::min(pos - static_cast<int32_t>(m), 4)];
+                value = &eval[std::min(pos - static_cast<int32_t>(m), 4)];
             } else {
-                value = tokens.tokens[pos][item.column];
+                value = &tokens.tokens[pos][item.column];
+            }
+
+            if (item.type == 't') {
+                tmp = (MatchRegex(item.value, *value, n) == -1) ? "false" : "true";
+                value = &tmp;
+            } else if (item.type == 'm') {
+                int32_t p = MatchRegex(item.value, *value, n);
+                if (p == -1) continue;         // No match found
+                tmp = value->substr(p, n);
+                value = &tmp;
             }
         }
-
-        if (item.type == 's') {
-            value = item.value;
-        } else if (item.type == 't') {
-            value = (MatchRegex(item.value, value, n) == -1) ? "false" : "true";
-        } else if (item.type == 'm') {
-            int32_t pos = MatchRegex(item.value, value, n);
-            if (pos == -1) {
-                continue;  // No match found
-            }
-            value = value.substr(pos, n);
-        }        
 
         if (item.caps) {
-            std::string lowered;
-            lowered.reserve(value.length());
-            for (char c : value) {
-                lowered += std::tolower(c);
-            }
-            result += lowered;
+            for (char c : *value)
+                result += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
         } else {
-            result += value;
+            result += *value;
         }
     }
-
-    return result;
 }
 
 } // namespace wati

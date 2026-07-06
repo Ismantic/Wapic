@@ -134,6 +134,7 @@ Sentence* DataProcessor::TokensToSentence(const TokenStrs* tos) const {
     sen->obs_buffer.assign(tos->Size() * stride, 0);
     int32_t* buf = sen->obs_buffer.data();
 
+    std::string obs;  // reused across patterns/positions (see Pattern::Execute)
     for (uint32_t t = 0; t < tos->Size(); t++) {
         Sentence::Pos& pos = sen->pos[t];
 
@@ -143,7 +144,7 @@ Sentence* DataProcessor::TokensToSentence(const TokenStrs* tos) const {
         int32_t* bigram_current = bigram_start;
 
         for (Pattern* pattern : patterns) {
-            std::string obs = pattern->Execute(*tos, t);
+            pattern->Execute(*tos, t, obs);
             int64_t i = observations->Insert(obs); // Lock when in test
 
             if (i == -1) continue;
