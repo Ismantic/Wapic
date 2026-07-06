@@ -69,7 +69,7 @@ warm-start 配方见数据集仓库
 
 ## 训练自己的模型
 
-除了使用发布模型，你也可以按 [TRAINING.md](TRAINING.md) 用公开的人民日报 1998
+除了使用发布模型，你也可以按 [TUTORIAL.md](TUTORIAL.md) 用公开的人民日报 1998
 语料从零训练一个分词模型（1–5 月训练 / 6 月测试，单机约 3 分钟得到 F1≈97.4）。
 涉及脚本：`scripts/convert.py`（PFR→jsonl）、`scripts/prepare.py`（jsonl→BMES）。
 
