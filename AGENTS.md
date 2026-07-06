@@ -18,7 +18,7 @@ Models and datasets live on Hugging Face, not in Git. Downloaded files under
 cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 python3 scripts/download_model.py
-./build/wapic -m data/model/wapic-20260605.wac
+./build/wapic -m data/model/wapic-cws.wac
 ```
 
 Use Release builds because training and inference depend heavily on compiler
@@ -40,7 +40,7 @@ CLI mode. For segmentation behavior, run:
 
 ```bash
 python3 scripts/download_dataset.py
-bash scripts/evaluate.sh data/model/wapic-20260605.wac
+bash scripts/evaluate.sh data/model/wapic-cws.wac
 ```
 
 Report both PDMP and 12M F1. The expected release baseline is `97.71` and

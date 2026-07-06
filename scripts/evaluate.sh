@@ -3,15 +3,17 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-DATA_DIR=${WAPIC_DATA_DIR:-data/dataset/test}
+DATA_DIR=${WAPIC_DATA_DIR:-data/dataset}
 WAPIC_BIN=${WAPIC_BIN:-./build/wapic}
 RESULT=$(mktemp)
-trap 'rm -f "$RESULT"' EXIT
+NOLBL=$(mktemp)
+trap 'rm -f "$RESULT" "$NOLBL"' EXIT
 
 eval_one() {
     local M=$1
     local GOLD=$2
-    local NOLBL=$3
+    # Char-only input is derived from the gold BMES file (nolabel not shipped).
+    awk '{print $1}' "$GOLD" > "$NOLBL"
     "$WAPIC_BIN" test -m "$M" "$NOLBL" "$RESULT" 2>/dev/null >/dev/null
     python3 - "$GOLD" "$RESULT" <<'PY'
 import sys
@@ -68,7 +70,7 @@ fi
 for M in "$@"; do
     [[ -f "$M" ]] || { echo "Model not found: $M" >&2; exit 1; }
     SIZE=$(ls -lh "$M" | awk '{print $5}')
-    F_PDMP=$(eval_one "$M" "$DATA_DIR/pdmp_test.txt" "$DATA_DIR/pdmp_test_nolabel.txt")
-    F_12M=$(eval_one "$M" "$DATA_DIR/12m_test.txt" "$DATA_DIR/12m_test_nolabel.txt")
+    F_PDMP=$(eval_one "$M" "$DATA_DIR/wapic-cws-data-test-2.txt")
+    F_12M=$(eval_one "$M" "$DATA_DIR/wapic-cws-data-test-1.txt")
     echo "RESULT $(basename "$M" .wac): size=$SIZE F1_pdmp=$F_PDMP F1_12m=$F_12M"
 done

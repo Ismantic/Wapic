@@ -11,8 +11,9 @@ from pathlib import Path
 
 
 REPO_ID = "Ismantic/wapic-cws"
-MODEL_FILENAME = "wapic-20260605.wac"
-DEFAULT_OUTPUT_DIR = Path(__file__).resolve().parents[1] / "data" / "model"
+MODEL_FILENAME = "model/wapic-cws.wac"
+# Download into data/ so the repo's model/ subdir lands at data/model/.
+DEFAULT_OUTPUT_DIR = Path(__file__).resolve().parents[1] / "data"
 
 
 def parse_args():

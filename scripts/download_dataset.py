@@ -7,7 +7,8 @@ from pathlib import Path
 
 
 REPO_ID = "Ismantic/wapic-cws-data"
-DEFAULT_OUTPUT_DIR = Path(__file__).resolve().parents[1] / "data" / "dataset"
+# Download into data/ so the repo's dataset/ subdir lands at data/dataset/.
+DEFAULT_OUTPUT_DIR = Path(__file__).resolve().parents[1] / "data"
 
 
 def parse_args():
@@ -49,7 +50,7 @@ def main():
 
     output_dir = args.output_dir.expanduser().resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
-    patterns = None if args.full else ["test/*.txt"]
+    patterns = None if args.full else ["dataset/wapic-cws-data-test-*"]
 
     scope = "complete dataset" if args.full else "evaluation data"
     print(f"Downloading {scope} from {REPO_ID}")

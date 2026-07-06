@@ -26,20 +26,20 @@ uv pip install huggingface_hub
 python3 scripts/download_model.py
 ```
 
-模型默认保存到 `data/model/wapic-20260605.wac`。
+模型默认保存到 `data/model/wapic-cws.wac`。
 
 ## 推理
 
 交互式分词：
 
 ```bash
-./build/wapic -m data/model/wapic-20260605.wac
+./build/wapic -m data/model/wapic-cws.wac
 ```
 
 批量 BMES 标注：
 
 ```bash
-./build/wapic test -m data/model/wapic-20260605.wac \
+./build/wapic test -m data/model/wapic-cws.wac \
   input_chars.txt output_tags.txt
 ```
 
@@ -53,14 +53,14 @@ cmake -B build_py -DWAPIC_PYTHON=ON -DCMAKE_BUILD_TYPE=Release \
   -Dpybind11_DIR="$(python3 -m pybind11 --cmakedir)"
 cmake --build build_py
 PYTHONPATH=build_py/python python3 -c \
-  'import wapic; print(wapic.Segmenter("data/model/wapic-20260605.wac").cut("中华人民共和国"))'
+  'import wapic; print(wapic.Segmenter("data/model/wapic-cws.wac").cut("中华人民共和国"))'
 ```
 
 ## 评估
 
 ```bash
 python3 scripts/download_dataset.py
-bash scripts/evaluate.sh data/model/wapic-20260605.wac
+bash scripts/evaluate.sh data/model/wapic-cws.wac
 ```
 
 发布模型在 PDMP/12M retag2 测试集上的 F1 为97.71/97.49。训练数据与

@@ -6,14 +6,14 @@ Hugging Face 为唯一数据源，避免仓库中的历史实验文件与最终 
 ## Published Artifacts
 
 - `Ismantic/wapic-cws`
-  - `wapic-20260605.wac`: 主发布模型
-  - `wapic-20260606-base.wac`: Stage-1 warm-start 模型
-  - `pattern.txt`: 发布模型使用的特征模板
+  - `model/wapic-cws.wac`: 主发布模型
+  - `model/wapic-cws-base.wac`: Stage-1 warm-start 模型
+  - `model/pattern.txt`: 发布模型使用的特征模板
 - `Ismantic/wapic-cws-data`
-  - `train/stage1_train.*`: Stage-1 冻结训练集
-  - `train/stage2_train.*`: Stage-2 冻结训练集
-  - `test/pdmp_test.*`: PD-1998 modern+punct 评估集
-  - `test/12m_test.*`: 12M 泛化评估集
+  - `dataset/wapic-cws-data-1.*`: Stage-1 冻结训练集
+  - `dataset/wapic-cws-data-2.*`: Stage-2 冻结训练集
+  - `dataset/wapic-cws-data-test-2.*`: PD-1998 modern+punct 评估集
+  - `dataset/wapic-cws-data-test-1.*`: 12M 泛化评估集
 
 数据集仓库中的 `RELEASE_TRAINING_DATA.md` 记录完整训练参数、数据来源和
 warm-start 顺序。
@@ -37,7 +37,7 @@ python3 scripts/download_dataset.py --full
 ## Verify the Release
 
 ```bash
-bash scripts/evaluate.sh data/model/wapic-20260605.wac
+bash scripts/evaluate.sh data/model/wapic-cws.wac
 ```
 
 预期结果：
