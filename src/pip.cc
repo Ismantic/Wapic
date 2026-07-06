@@ -19,6 +19,7 @@
 
 #include "data.h"
 #include "model.h"
+#include "preprocess.h"
 #include "score.h"
 #include "sentence.h"
 
@@ -108,8 +109,25 @@ public:
         return {chars, tags};
     }
 
-    // Cut: char + tag → joined words.
+    // Cut with pre-segmentation (default): split raw text into runs, send only
+    // Han runs to the CRF; latin/digit/punctuation become tokens directly. This
+    // matches the retag2 tokenization the model was trained on.
     std::vector<std::string> cut(const std::string& text) {
+        std::vector<std::string> out;
+        for (const auto& run : wati::PreSegment(text)) {
+            if (run.type == wati::RunType::Space) continue;  // word boundary
+            if (run.type == wati::RunType::Han) {
+                for (auto& w : cut_raw(run.text)) out.push_back(std::move(w));
+            } else {
+                out.push_back(run.text);  // latin / digit / punct token
+            }
+        }
+        return out;
+    }
+
+    // Raw char-level cut: hand the whole string to the CRF one char at a time,
+    // no pre-segmentation. Kept for callers needing the training-columnar path.
+    std::vector<std::string> cut_raw(const std::string& text) {
         auto [chars, tags] = tag(text);
         std::vector<std::string> words;
         std::string cur;
@@ -148,44 +166,11 @@ public:
         return starts;
     }
 
-    // cut_smart:中英混合输入的正确切词。
-    // Wapic 是纯中文 CRF — 英文不该让它处理(会切成单字)。
-    // 步骤:
-    //   1) 按空白切 segments
-    //   2) 全无中文 segment → 整体当 1 word
-    //   3) 含中文 segment → wapic CRF 切
-    // 用于:WWM 数据准备(中文整词 mask + 英文 BPE word group mask)。
+    // cut_smart: kept for backward compatibility. The pre-segmentation logic it
+    // used to carry now lives in cut()/PreSegment (proper Unicode classification,
+    // punctuation and CN/EN/digit boundaries), so this just delegates.
     std::vector<std::string> cut_smart(const std::string& text) {
-        std::vector<std::string> out;
-        // utf-8 split by ASCII whitespace
-        size_t i = 0;
-        while (i < text.size()) {
-            // skip whitespace
-            while (i < text.size() && std::isspace((unsigned char)text[i])) i++;
-            if (i >= text.size()) break;
-            size_t start = i;
-            while (i < text.size() && !std::isspace((unsigned char)text[i])) i++;
-            std::string seg = text.substr(start, i - start);
-            // check chinese-presence
-            auto chars = utf8_chars(seg);
-            bool has_chinese = false;
-            for (const auto& c : chars) {
-                // crude:多字节(>=3 byte)且头字节是 0xE4-0xE9 大致是 CJK 范围(U+4E00-U+9FFF)
-                if (c.size() >= 3) {
-                    unsigned char b0 = (unsigned char)c[0];
-                    if (b0 >= 0xE4 && b0 <= 0xE9) { has_chinese = true; break; }
-                }
-            }
-            if (!has_chinese) {
-                // 全英文/数字 → 整段当 1 word
-                out.push_back(seg);
-            } else {
-                // 含中文 → wapic CRF 切
-                std::vector<std::string> words = cut(seg);
-                for (auto& w : words) out.push_back(std::move(w));
-            }
-        }
-        return out;
+        return cut(text);
     }
 
     std::vector<std::vector<std::string>>
@@ -214,9 +199,13 @@ PYBIND11_MODULE(_core, m) {
         .def(py::init<const std::string&>(), py::arg("model_path"),
              "Load a Wapic CRF model from disk.")
         .def("cut", &Segmenter::cut, py::arg("text"),
-             "Segment a single string into list[str] of words.")
+             "Segment a string into list[str]. Pre-segments first (whitespace, "
+             "punctuation, CN/EN/digit boundaries); only Han runs go to the CRF.")
         .def("cut_batch", &Segmenter::cut_batch, py::arg("texts"),
              "Segment a list of strings, returns list[list[str]].")
+        .def("cut_raw", &Segmenter::cut_raw, py::arg("text"),
+             "Raw char-level CRF cut with NO pre-segmentation (whole string fed "
+             "one char at a time). Matches the training-columnar path.")
         .def("tag", &Segmenter::tag, py::arg("text"),
              "Return (chars: list[str], tags: list[str]). BMES tags.")
         .def("word_starts", &Segmenter::word_starts, py::arg("text"),

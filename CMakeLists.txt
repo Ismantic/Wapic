@@ -8,6 +8,7 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(SRCS
     src/pattern.cc
     src/misc.cc
+    src/preprocess.cc
     src/trie.cc
     src/data.cc
     src/model.cc

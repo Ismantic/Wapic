@@ -7,6 +7,7 @@
 #include "model.h"
 #include "data.h"
 #include "optimize.h"
+#include "preprocess.h"
 #include "score.h"
 
 // Decode a single UTF-8 character, return bytes consumed (1-4), or 0 on error
@@ -171,46 +172,56 @@ int main(int argc, char* argv[]) {
                 if (line.empty()) continue;
                 if (line == "q" || line == "quit" || line == "exit") break;
 
-                // Split input into UTF-8 characters, build CRF input
-                auto chars = utf8_chars(line);
-                if (chars.empty()) continue;
-
-                // Build columnar input: one char per line, blank line to end sentence
-                std::string buf;
-                for (auto& c : chars) {
-                    buf += c;
-                    buf += '\n';
-                }
-                buf += '\n';
-
-                std::istringstream iss(buf);
-                wati::RawStrs* raw = processor->ReadRawStrs(iss);
-                if (!raw) continue;
-
-                wati::Sentence* sen = processor->RawToSentence(raw, false);
-                if (!sen) { delete raw; continue; }
-
-                std::vector<int64_t> labels;
-                scorer.Viterbi(*sen, labels);
-
-                // Reconstruct segmented text from BMES tags
-                std::string result;
-                for (size_t t = 0; t < chars.size() && t < labels.size(); t++) {
-                    std::string tag = processor->GetLabelStr(labels[t]);
-                    result += chars[t];
-                    if (tag == "E" || tag == "S") {
-                        result += ' ';
+                // Pre-segment: only Han runs go to the CRF; latin / digit /
+                // punctuation runs become tokens directly. Mirrors the retag2
+                // tokenization the model was trained on. Training paths (fit /
+                // test) do not use this.
+                std::vector<std::string> words;
+                for (const auto& run : wati::PreSegment(line)) {
+                    if (run.type == wati::RunType::Space) continue;  // boundary
+                    if (run.type != wati::RunType::Han) {
+                        words.push_back(run.text);
+                        continue;
                     }
-                }
-                // Trim trailing space
-                if (!result.empty() && result.back() == ' ') {
-                    result.pop_back();
+
+                    // Columnar CRF over this Han run: one char per line.
+                    auto chars = utf8_chars(run.text);
+                    if (chars.empty()) continue;
+                    std::string buf;
+                    for (auto& c : chars) { buf += c; buf += '\n'; }
+                    buf += '\n';
+
+                    std::istringstream iss(buf);
+                    wati::RawStrs* raw = processor->ReadRawStrs(iss);
+                    if (!raw) continue;
+                    wati::Sentence* sen = processor->RawToSentence(raw, false);
+                    if (!sen) { delete raw; continue; }
+
+                    std::vector<int64_t> labels;
+                    scorer.Viterbi(*sen, labels);
+
+                    std::string cur;
+                    for (size_t t = 0; t < chars.size() && t < labels.size(); t++) {
+                        cur += chars[t];
+                        std::string tag = processor->GetLabelStr(labels[t]);
+                        if (tag == "E" || tag == "S") {
+                            words.push_back(cur);
+                            cur.clear();
+                        }
+                    }
+                    if (!cur.empty()) words.push_back(cur);
+
+                    delete raw;
+                    delete sen;
                 }
 
+                // Join words with single spaces.
+                std::string result;
+                for (size_t k = 0; k < words.size(); k++) {
+                    if (k) result += ' ';
+                    result += words[k];
+                }
                 std::cout << result << "\n";
-
-                delete raw;
-                delete sen;
             }
             break;
         }
