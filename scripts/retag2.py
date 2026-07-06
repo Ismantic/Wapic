@@ -1,8 +1,8 @@
 """Shared retag2 / PreSegment helpers for the data scripts.
 
 `classify` mirrors ClassifyCodePoint in src/preprocess.cc — keep the two in sync
-if the character-type rules ever change. Imported by check_retag2.py,
-normalize_retag2.py, convert.py and prepare.py so the rules live in one place.
+if the character-type rules ever change. Imported by convert.py and prepare.py so
+the rules live in one place.
 """
 
 

@@ -66,12 +66,6 @@ python3 scripts/prepare.py
 ...
 ```
 
-可选：用 `scripts/check_retag2.py` 校验数据符合 PreSegment 口径（应为 0 违规）：
-
-```bash
-python3 scripts/check_retag2.py data/PeopleDaily_1-5.txt data/PeopleDaily_6.txt
-```
-
 ## 4. 训练
 
 用 L-BFGS（OWL-QN，带 L1 稀疏）在训练集上拟合 CRF。`data/pattern.txt` 是特征模板
@@ -136,5 +130,5 @@ PY
 - **两阶段 warm-start**：先训一个 base，再 `--init-from base.wac` 在精修集上继续，
   最后 `convert --save-prune` 剪枝。发布模型的完整配方见数据集仓库
   [`RELEASE_TRAINING_DATA.md`](https://huggingface.co/datasets/Ismantic/wapic-cws-data)。
-- **保持口径一致**：训练数据务必用 PreSegment 口径（本教程脚本已保证），否则和推理
-  对不齐。`scripts/normalize_retag2.py` 可把任意 `{source,cut}` 数据归一化到该口径。
+- **保持口径一致**：训练数据务必用 PreSegment 口径（本教程的 `convert.py` 已保证），
+  否则和推理对不齐。字符类型规则集中在 `scripts/retag2.py`。
