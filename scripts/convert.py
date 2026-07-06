@@ -30,7 +30,67 @@ import os
 import re
 import sys
 
-from retag2 import resegment
+
+def classify(cp):
+    """Code point -> category: S space, D digit, L latin, H han, P punct.
+
+    Mirrors ClassifyCodePoint in src/preprocess.cc — keep the two in sync if the
+    character-type rules ever change.
+    """
+    if cp in (0x20, 0x09, 0x0A, 0x0D, 0x0C, 0x0B, 0x00A0, 0x3000):
+        return "S"
+    if 0x30 <= cp <= 0x39 or 0xFF10 <= cp <= 0xFF19:
+        return "D"
+    if (0x41 <= cp <= 0x5A or 0x61 <= cp <= 0x7A or 0x00C0 <= cp <= 0x024F
+            or 0xFF21 <= cp <= 0xFF3A or 0xFF41 <= cp <= 0xFF5A):
+        return "L"
+    if (0x4E00 <= cp <= 0x9FFF or 0x3400 <= cp <= 0x4DBF
+            or 0xF900 <= cp <= 0xFAFF or cp == 0x3007
+            or 0x20000 <= cp <= 0x2A6DF or 0x2A700 <= cp <= 0x2EBEF):
+        return "H"
+    return "P"
+
+
+def resegment(source, words):
+    """Retokenize `source` to the PreSegment convention.
+
+    Han word boundaries from `words` are preserved; non-Han is merged/split by
+    character type (latin/digit run -> one token, latin|digit split, each
+    punctuation mark its own token) and whitespace is dropped.
+    """
+    starts = [False] * len(source)
+    si = 0
+    for w in words:
+        while si < len(source) and classify(ord(source[si])) == "S":
+            si += 1
+        if source[si:si + len(w)] != w:
+            return words                     # data anomaly: leave untouched
+        starts[si] = True
+        si += len(w)
+
+    out, cur, prev_cat, prev_space = [], "", None, True
+    for i, ch in enumerate(source):
+        cat = classify(ord(ch))
+        if cat == "S":
+            prev_space = True
+            continue
+        if cur == "":
+            start_new = True
+        elif prev_space or cat != prev_cat or cat == "P":
+            start_new = True
+        elif cat == "H":
+            start_new = starts[i]            # keep original Han segmentation
+        else:
+            start_new = False                # merge latin/digit run
+        if start_new and cur:
+            out.append(cur)
+            cur = ""
+        cur += ch
+        prev_cat = cat
+        prev_space = False
+    if cur:
+        out.append(cur)
+    return out
 
 
 def parse_pfr_line(line, merge_names=True):
@@ -69,7 +129,7 @@ def convert(paths, out_path, merge_names):
                     continue
                 source = "".join(words)
                 rec = {"source": source,
-                       "cut": " ".join(resegment(source, words)[0])}
+                       "cut": " ".join(resegment(source, words))}
                 out.write(json.dumps(rec, ensure_ascii=False) + "\n")
                 n += 1
     return n

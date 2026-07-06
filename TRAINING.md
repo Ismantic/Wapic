@@ -131,4 +131,4 @@ PY
   最后 `convert --save-prune` 剪枝。发布模型的完整配方见数据集仓库
   [`RELEASE_TRAINING_DATA.md`](https://huggingface.co/datasets/Ismantic/wapic-cws-data)。
 - **保持口径一致**：训练数据务必用 PreSegment 口径（本教程的 `convert.py` 已保证），
-  否则和推理对不齐。字符类型规则集中在 `scripts/retag2.py`。
+  否则和推理对不齐。字符类型规则见 `convert.py` 的 `classify()`（与 `src/preprocess.cc` 对齐）。

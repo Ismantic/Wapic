@@ -20,7 +20,19 @@ import json
 import os
 import sys
 
-from retag2 import words_to_bmes
+
+def words_to_bmes(words):
+    """A list of words -> BMES column lines ('<char> <B|M|E|S>')."""
+    lines = []
+    for w in words:
+        if len(w) == 1:
+            lines.append(w + " S")
+        else:
+            lines.append(w[0] + " B")
+            for c in w[1:-1]:
+                lines.append(c + " M")
+            lines.append(w[-1] + " E")
+    return lines
 
 
 def jsonl_to_bmes(jsonl_path, bmes_path):
