@@ -140,6 +140,8 @@ int main(int argc, char* argv[]) {
         case wati::RunMode::LABEL: {
             wati::Model model(std::make_unique<wati::DataProcessor>());
             model.Load(option.model_file);
+            // Inference-only: obs strings won't be needed (DAT handles lookups).
+            model.FreeObservationStrings();
 
             wati::Scorer s(&model);
 
@@ -154,6 +156,8 @@ int main(int argc, char* argv[]) {
             wati::Model model(std::make_unique<wati::DataProcessor>());
             std::cerr << "Loading model..." << std::flush;
             model.Load(option.model_file);
+            // Inference-only: obs strings won't be needed (DAT handles lookups).
+            model.FreeObservationStrings();
             std::cerr << " done.\n";
 
             const wati::DataProcessor* processor = model.GetDataProcessor();
