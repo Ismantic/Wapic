@@ -20,19 +20,7 @@ import json
 import os
 import sys
 
-
-def cut_to_bmes(cut):
-    """A space-separated 'cut' string -> BMES lines for its characters."""
-    lines = []
-    for word in cut.split():
-        if len(word) == 1:
-            lines.append(word + " S")
-        else:
-            lines.append(word[0] + " B")
-            for c in word[1:-1]:
-                lines.append(c + " M")
-            lines.append(word[-1] + " E")
-    return lines
+from retag2 import words_to_bmes
 
 
 def jsonl_to_bmes(jsonl_path, bmes_path):
@@ -43,7 +31,7 @@ def jsonl_to_bmes(jsonl_path, bmes_path):
             if not line:
                 continue
             cut = json.loads(line).get("cut", "")
-            for l in cut_to_bmes(cut):
+            for l in words_to_bmes(cut.split()):
                 out.write(l + "\n")
             out.write("\n")
             n += 1

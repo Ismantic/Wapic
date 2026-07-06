@@ -28,21 +28,7 @@ import json
 import sys
 from pathlib import Path
 
-
-# --- character classification: mirrors ClassifyCodePoint in src/preprocess.cc ---
-def classify(cp):
-    if cp in (0x20, 0x09, 0x0A, 0x0D, 0x0C, 0x0B, 0x00A0, 0x3000):
-        return "S"
-    if 0x30 <= cp <= 0x39 or 0xFF10 <= cp <= 0xFF19:
-        return "D"
-    if (0x41 <= cp <= 0x5A or 0x61 <= cp <= 0x7A or 0x00C0 <= cp <= 0x024F
-            or 0xFF21 <= cp <= 0xFF3A or 0xFF41 <= cp <= 0xFF5A):
-        return "L"
-    if (0x4E00 <= cp <= 0x9FFF or 0x3400 <= cp <= 0x4DBF
-            or 0xF900 <= cp <= 0xFAFF or cp == 0x3007
-            or 0x20000 <= cp <= 0x2A6DF or 0x2A700 <= cp <= 0x2EBEF):
-        return "H"
-    return "P"
+from retag2 import classify
 
 
 def word_violation(w):
