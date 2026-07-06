@@ -10,26 +10,6 @@
 #include "preprocess.h"
 #include "score.h"
 
-// Decode a single UTF-8 character, return bytes consumed (1-4), or 0 on error
-static int utf8_char_len(unsigned char c) {
-    if (c < 0x80) return 1;
-    if ((c & 0xE0) == 0xC0) return 2;
-    if ((c & 0xF0) == 0xE0) return 3;
-    if ((c & 0xF8) == 0xF0) return 4;
-    return 1;
-}
-
-// Split a UTF-8 string into individual characters
-static std::vector<std::string> utf8_chars(const std::string& s) {
-    std::vector<std::string> chars;
-    size_t i = 0;
-    while (i < s.size()) {
-        int len = utf8_char_len(static_cast<unsigned char>(s[i]));
-        chars.push_back(s.substr(i, len));
-        i += len;
-    }
-    return chars;
-}
 
 int main(int argc, char* argv[]) {
 
@@ -185,7 +165,7 @@ int main(int argc, char* argv[]) {
                     }
 
                     // Columnar CRF over this Han run: one char per line.
-                    auto chars = utf8_chars(run.text);
+                    auto chars = wati::Utf8Chars(run.text);
                     if (chars.empty()) continue;
                     std::string buf;
                     for (auto& c : chars) { buf += c; buf += '\n'; }

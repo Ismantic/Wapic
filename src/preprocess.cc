@@ -36,6 +36,17 @@ int Utf8Decode(const std::string& s, size_t i, uint32_t* cp) {
     return len;
 }
 
+std::vector<std::string> Utf8Chars(const std::string& s) {
+    std::vector<std::string> chars;
+    size_t i = 0;
+    while (i < s.size()) {
+        int len = Utf8CharLen(static_cast<unsigned char>(s[i]));
+        chars.push_back(s.substr(i, len));
+        i += static_cast<size_t>(len);
+    }
+    return chars;
+}
+
 namespace {
 inline bool InRange(uint32_t c, uint32_t lo, uint32_t hi) {
     return c >= lo && c <= hi;

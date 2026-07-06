@@ -25,27 +25,6 @@
 
 namespace py = pybind11;
 
-// Decode a single UTF-8 character, return bytes consumed (1-4), or 0 on error
-static int utf8_char_len(unsigned char c) {
-    if (c < 0x80) return 1;
-    if ((c & 0xE0) == 0xC0) return 2;
-    if ((c & 0xF0) == 0xE0) return 3;
-    if ((c & 0xF8) == 0xF0) return 4;
-    return 1;
-}
-
-// Split a UTF-8 string into individual characters
-static std::vector<std::string> utf8_chars(const std::string& s) {
-    std::vector<std::string> chars;
-    size_t i = 0;
-    while (i < s.size()) {
-        int len = utf8_char_len(static_cast<unsigned char>(s[i]));
-        chars.push_back(s.substr(i, len));
-        i += len;
-    }
-    return chars;
-}
-
 // Char-level chunking: process at most max_chars_per_seg per CRF call,
 // so very long inputs don't blow scorer state. The CRF sees each chunk as a
 // separate sentence (small loss of context at chunk boundaries; default 1024
@@ -71,7 +50,7 @@ public:
     // Returns (chars, tags). On empty input, returns ({}, {}).
     std::pair<std::vector<std::string>, std::vector<std::string>>
     tag(const std::string& text) {
-        auto chars = utf8_chars(text);
+        auto chars = wati::Utf8Chars(text);
         std::vector<std::string> tags;
         if (chars.empty()) return {chars, tags};
         tags.reserve(chars.size());

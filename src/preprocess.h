@@ -28,6 +28,9 @@ int Utf8CharLen(unsigned char c);
 // malformed/truncated sequence) and writes the code point to *cp.
 int Utf8Decode(const std::string& s, size_t i, uint32_t* cp);
 
+// Split a UTF-8 string into one string per character (code point).
+std::vector<std::string> Utf8Chars(const std::string& s);
+
 // Classify a Unicode code point into a run category.
 RunType ClassifyCodePoint(uint32_t cp);
 
