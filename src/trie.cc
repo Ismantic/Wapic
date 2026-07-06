@@ -3,7 +3,6 @@
 
 #include <cstdio>
 #include <algorithm>
-#include <map>
 #ifdef __GLIBC__
 #include <malloc.h>
 #endif
@@ -15,10 +14,29 @@ namespace wati {
 namespace {
 
 struct DartBuilder {
+    // Children kept sorted by byte in a flat vector. std::map would allocate a
+    // red-black node per child and a tree per node; for a trie over ~2M sorted
+    // strings that dominates build-time peak memory. Since Build() feeds strings
+    // in sorted order, children almost always arrive in increasing byte order,
+    // so find_or_add() hits the cheap append path (binary-search insert is the
+    // rare fallback, kept only for correctness on unsorted input).
     struct TrieNode {
-        std::map<uint8_t, std::unique_ptr<TrieNode>> down;
+        std::vector<std::pair<uint8_t, std::unique_ptr<TrieNode>>> down;
         bool eow = false;
         int32_t value = 0;
+
+        TrieNode* find_or_add(uint8_t t) {
+            if (!down.empty() && down.back().first < t) {
+                down.emplace_back(t, std::make_unique<TrieNode>());
+                return down.back().second.get();
+            }
+            auto it = std::lower_bound(
+                down.begin(), down.end(), t,
+                [](const auto& p, uint8_t k) { return p.first < k; });
+            if (it != down.end() && it->first == t) return it->second.get();
+            it = down.emplace(it, t, std::make_unique<TrieNode>());
+            return it->second.get();
+        }
     };
 
     std::vector<DartArray::ArrayUnit> units;
@@ -37,16 +55,7 @@ struct DartBuilder {
     void Insert(const std::string& s, int32_t v) {
         TrieNode* cur = root.get();
         for (char c : s) {
-            uint8_t t = static_cast<uint8_t>(c);
-            auto it = cur->down.find(t);
-            if (it == cur->down.end()) {
-                auto p = std::make_unique<TrieNode>();
-                TrieNode* raw = p.get();
-                cur->down[t] = std::move(p);
-                cur = raw;
-            } else {
-                cur = it->second.get();
-            }
+            cur = cur->find_or_add(static_cast<uint8_t>(c));
         }
         cur->eow = true;
         cur->value = v;
@@ -111,10 +120,10 @@ struct DartBuilder {
         }
     }
 
-    void Build(const std::vector<std::string>& strs,
+    void Build(const std::vector<const std::string*>& strs,
                const std::vector<int32_t>& vals) {
         root = std::make_unique<TrieNode>();
-        for (std::size_t i = 0; i < strs.size(); ++i) Insert(strs[i], vals[i]);
+        for (std::size_t i = 0; i < strs.size(); ++i) Insert(*strs[i], vals[i]);
         units.assign(1024, {});
         uses.assign(1024, false);
         uses[0] = true;
@@ -129,7 +138,7 @@ struct DartBuilder {
 
 }  // namespace
 
-void DartArray::Build(const std::vector<std::string>& strs,
+void DartArray::Build(const std::vector<const std::string*>& strs,
                       const std::vector<int32_t>& values) {
     if (strs.size() != values.size() || strs.empty()) {
         size_ = 0;
@@ -353,26 +362,29 @@ void Trie::FreeValueStrings() {
 void Trie::BuildDAT() {
     if (!dat_.Empty()) return;  // already built; idempotent
 
-    // Collect (value, id) pairs and sort by value (DAT requires sorted input).
-    std::vector<std::pair<std::string, int32_t>> pairs;
-    pairs.reserve(data_.size());
+    // DAT needs the entries sorted by value. Sort an index permutation and hand
+    // the builder pointers into data_'s strings rather than copying every string
+    // into a temporary (which, on a large model, doubles peak memory for the
+    // duration of the build).
+    const size_t N = data_.size();
     for (auto* v : data_) {
         if (v->i > INT32_MAX) {
             // overflow: skip building DAT (fall back to binary trie)
             return;
         }
-        pairs.emplace_back(v->value, static_cast<int32_t>(v->i));
     }
-    std::sort(pairs.begin(), pairs.end(),
-              [](const auto& a, const auto& b) { return a.first < b.first; });
+    std::vector<std::pair<const std::string*, int32_t>> order;
+    order.reserve(N);
+    for (auto* v : data_)
+        order.emplace_back(&v->value, static_cast<int32_t>(v->i));
+    std::sort(order.begin(), order.end(),
+              [](const auto& a, const auto& b) { return *a.first < *b.first; });
 
-    std::vector<std::string> strs;
-    std::vector<int32_t> ids;
-    strs.reserve(pairs.size());
-    ids.reserve(pairs.size());
-    for (auto& p : pairs) {
-        strs.push_back(std::move(p.first));
-        ids.push_back(p.second);
+    std::vector<const std::string*> strs(N);
+    std::vector<int32_t> ids(N);
+    for (size_t k = 0; k < N; ++k) {
+        strs[k] = order[k].first;
+        ids[k]  = order[k].second;
     }
     dat_.Build(strs, ids);
 

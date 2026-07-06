@@ -66,7 +66,7 @@ public:
 
     // Build from sorted (str, id) pairs. Both vectors must be the same length
     // and `strs` must be lexicographically sorted.
-    void Build(const std::vector<std::string>& strs,
+    void Build(const std::vector<const std::string*>& strs,
                const std::vector<int32_t>& values);
 
     SearchResult Lookup(const std::string& str) const;
