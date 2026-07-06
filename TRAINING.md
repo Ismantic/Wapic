@@ -81,44 +81,12 @@ python3 scripts/prepare.py
 
 ## 5. 评估
 
-测试集是带标签的 BMES gold；先去掉标签列得到纯字符输入，跑模型，再算 span 级 F1：
+`scripts/test.py` 会从 gold 生成纯字符输入、跑模型、算 span 级 P/R/F1：
 
 ```bash
-awk '{print $1}' data/PeopleDaily_6.txt > /tmp/pd6_nolabel.txt
-./build/wapic test -m data/PeopleDaily_model.wac /tmp/pd6_nolabel.txt /tmp/pd6_pred.txt
-
-python3 - data/PeopleDaily_6.txt /tmp/pd6_pred.txt <<'PY'
-import sys
-def cols(path, is_pred):                # 读列式：gold=[字,标签]，pred=[标签,分数]
-    S, cur = [], []
-    for line in open(path, encoding="utf-8"):
-        line = line.rstrip()
-        if not line:
-            if cur: S.append(cur); cur = []
-            continue
-        if is_pred and line.startswith("score="): continue
-        cur.append(line.split())
-    if cur: S.append(cur)
-    return S
-def spans(tags):                        # BMES 标签 -> 词的 (起,止) span 集合
-    res, start = set(), 0
-    for i in range(1, len(tags) + 1):
-        if i == len(tags) or tags[i] in ("B", "S"):
-            res.add((start, i)); start = i
-    return res
-gold, pred = cols(sys.argv[1], False), cols(sys.argv[2], True)
-tp = fp = fn = 0
-for g, p in zip(gold, pred):
-    gt = [r[1] for r in g]; pt = [r[0] for r in p]
-    if len(gt) != len(pt): continue     # 同一串字符，标签对齐
-    a, b = spans(gt), spans(pt)
-    tp += len(a & b); fp += len(b - a); fn += len(a - b)
-P, R = tp / (tp + fp), tp / (tp + fn)
-print(f"F1={2*P*R/(P+R)*100:.2f}  P={P*100:.2f}  R={R*100:.2f}")
-PY
+python3 scripts/test.py data/PeopleDaily_model.wac --gold data/PeopleDaily_6.txt
+#   PeopleDaily_6.txt  F1=97.40  P=97.42  R=97.38
 ```
-
-> 这段 span 级 P/R/F1 的逻辑与 `scripts/evaluate.sh` 一致。
 
 在本教程的 1–5 月训练 / 6 月测试划分下，实测 **F1 = 97.40**（P 97.42 / R 97.38，
 `-i 100 -t 8` 约 3 分钟训完，102,739 句训练 / 21,143 句测试）。这已是很不错的结果；

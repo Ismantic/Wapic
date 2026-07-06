@@ -60,7 +60,7 @@ PYTHONPATH=build_py/python python3 -c \
 
 ```bash
 python3 scripts/download.py data
-bash scripts/evaluate.sh data/model/wapic-cws.wac
+python3 scripts/test.py data/model/wapic-cws.wac
 ```
 
 发布模型在 PDMP/12M retag2 测试集上的 F1 为97.70/97.48。训练数据与

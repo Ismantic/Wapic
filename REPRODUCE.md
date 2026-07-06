@@ -37,7 +37,7 @@ python3 scripts/download.py data --full
 ## Verify the Release
 
 ```bash
-bash scripts/evaluate.sh data/model/wapic-cws.wac
+python3 scripts/test.py data/model/wapic-cws.wac
 ```
 
 预期结果：

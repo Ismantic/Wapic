@@ -40,7 +40,7 @@ CLI mode. For segmentation behavior, run:
 
 ```bash
 python3 scripts/download.py data
-bash scripts/evaluate.sh data/model/wapic-cws.wac
+python3 scripts/test.py data/model/wapic-cws.wac
 ```
 
 Report both PDMP and 12M F1. The expected release baseline is `97.70` and
