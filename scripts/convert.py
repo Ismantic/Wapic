@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Convert the People's Daily 1998 (PFR `word/pos`) corpus to {source, cut} jsonl.
 
-Part of the "train your own CWS model" tutorial (see TRAINING.md). Each PFR line
+Part of the "train your own CWS model" tutorial (see TUTORIAL.md). Each PFR line
 is a paragraph:
 
     19980101-01-001-001/m  迈向/v  充满/v  希望/n  ...  １/m  张/q  ）/w
@@ -154,7 +154,7 @@ def main():
 
     files = sorted(glob.glob(os.path.join(args.data_dir, "1998*.txt")))
     if not files:
-        print(f"No 1998*.txt under {args.data_dir}. See TRAINING.md for how to "
+        print(f"No 1998*.txt under {args.data_dir}. See TUTORIAL.md for how to "
               f"fetch the People's Daily 1998 corpus.", file=sys.stderr)
         return 2
 

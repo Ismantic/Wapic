@@ -89,13 +89,27 @@ public:
     // Suited for WWM mask: zip with chars to know "is this char a word start".
     std::vector<int> word_starts(const std::string& text) {
         std::lock_guard<std::mutex> lock(mtx_);
-        auto [chars, tags] = tag_with(text, *scorer_);
         std::vector<int> starts;
-        size_t n = std::min(chars.size(), tags.size());
-        for (size_t i = 0; i < n; i++) {
-            if (tags[i] == "B" || tags[i] == "S") starts.push_back((int)i);
+        size_t offset = 0;
+        for (const auto& run : wati::PreSegment(text)) {
+            auto chars = wati::Utf8Chars(run.text);
+            if (run.type == wati::RunType::Space) {
+                offset += chars.size();
+                continue;
+            }
+            if (run.type == wati::RunType::Han) {
+                auto tagged = tag_with(run.text, *scorer_);
+                const auto& tags = tagged.second;
+                for (size_t i = 0; i < tags.size(); ++i) {
+                    if (tags[i] == "B" || tags[i] == "S")
+                        starts.push_back(static_cast<int>(offset + i));
+                }
+            } else {
+                starts.push_back(static_cast<int>(offset));
+            }
+            offset += chars.size();
         }
-        starts.push_back((int)chars.size());
+        starts.push_back(static_cast<int>(offset));
         return starts;
     }
 
@@ -109,14 +123,29 @@ public:
         tags.reserve(chars.size());
 
         const size_t kChunk = 1024;
-        for (size_t start = 0; start < chars.size(); start += kChunk) {
-            size_t end = std::min(start + kChunk, chars.size());
+        size_t start = 0;
+        while (start < chars.size()) {
+            uint32_t cp = 0;
+            wati::Utf8Decode(chars[start], 0, &cp);
+            if (wati::ClassifyCodePoint(cp) == wati::RunType::Space) {
+                tags.push_back("S");
+                ++start;
+                continue;
+            }
+
+            size_t end = start;
+            while (end < chars.size() && end - start < kChunk) {
+                wati::Utf8Decode(chars[end], 0, &cp);
+                if (wati::ClassifyCodePoint(cp) == wati::RunType::Space) break;
+                ++end;
+            }
             wati::RawStrs raw;
             raw.strs.reserve(end - start);
             for (size_t i = start; i < end; i++) raw.strs.push_back(chars[i]);
             wati::Sentence* sen = processor_->RawToSentence(&raw, false);
             if (!sen) {
                 for (size_t i = start; i < end; i++) tags.push_back("S");
+                start = end;
                 continue;
             }
             std::vector<int64_t> labels;
@@ -130,6 +159,7 @@ public:
             }
             while (tags.size() < end) tags.push_back("S");
             delete sen;
+            start = end;
         }
         return {chars, tags};
     }

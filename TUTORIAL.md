@@ -31,7 +31,9 @@ unzip -j data/PeopleDaily1998.zip '199801/1998*.txt' -d data/
 
 > 语料来源：PFR 语料库（北京大学计算语言学研究所 + 富士通研究开发中心，经人民日报社
 > 许可制作），仅供研究复现使用，版权归原作者所有。解压出的 `1998*.txt` 及后续生成的
-> jsonl / BMES 文件都在 `.gitignore` 中（仅 `pattern.txt` 与语料 zip 入库），不占用仓库。
+> jsonl / BMES 文件都在 `.gitignore` 中；只有 `pattern.txt`、语料说明与原始zip入库。
+> 该语料不适用项目的MIT许可证，使用前请阅读 [data/README.md](data/README.md)
+> 以及zip内的 `shengming.doc`。
 
 ## 2. PFR → `{source, cut}` jsonl
 

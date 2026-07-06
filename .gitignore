@@ -14,6 +14,7 @@ __pycache__/
 /data/*
 !/data/pattern.txt
 !/data/PeopleDaily1998.zip
+!/data/README.md
 /hf_upload/
 
 # Historical experiments and logs

@@ -53,6 +53,8 @@ private:
     std::vector<float_t> scale_;
     std::vector<float_t> unorm_;
     std::vector<float_t> bnorm_;
+    std::vector<float_t> scratch_y_;
+    std::vector<float_t> scratch_yy_;
 
     void ComputePsi(const Sentence& sen);
     void ComputeFowardBackward(const Sentence& sen);

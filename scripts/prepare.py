@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Turn the {source, cut} jsonl into wapic's native BMES training format.
 
-Part of the "train your own CWS model" tutorial (see TRAINING.md). Reads the
+Part of the "train your own CWS model" tutorial (see TUTORIAL.md). Reads the
 train/test jsonl produced by scripts/convert.py and writes BMES column files
 (`<char> <B|M|E|S>`, one char per line, blank line between sentences) that
 `wapic fit` / `wapic test` consume directly.
@@ -69,7 +69,7 @@ def main():
     jsonls = sorted(glob.glob(os.path.join(args.data_dir, "PeopleDaily_*.jsonl")))
     if not jsonls:
         print(f"No PeopleDaily_*.jsonl under {args.data_dir}. Run "
-              f"scripts/convert.py first (see TRAINING.md).", file=sys.stderr)
+              f"scripts/convert.py first (see TUTORIAL.md).", file=sys.stderr)
         return 2
     for jp in jsonls:
         out = os.path.splitext(jp)[0] + ".txt"

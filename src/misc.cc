@@ -1,18 +1,27 @@
 #include "misc.h"
 
 #include <stdint.h>
+#include <limits>
+#include <stdexcept>
 
 namespace wati {
 
 std::string ReadStrBin(std::istream& file) {
     uint16_t len;
-    file.read(reinterpret_cast<char*>(&len), sizeof(len));
+    if (!file.read(reinterpret_cast<char*>(&len), sizeof(len))) {
+        throw std::runtime_error("Invalid binary string length");
+    }
     std::string s(len, '\0');
-    file.read(&s[0], len);
+    if (len != 0 && !file.read(s.data(), len)) {
+        throw std::runtime_error("Truncated binary string");
+    }
     return s;
 }
 
 void WriteStrBin(std::ostream& file, const std::string& str) {
+    if (str.size() > std::numeric_limits<uint16_t>::max()) {
+        throw std::runtime_error("Binary string exceeds uint16 length limit");
+    }
     uint16_t len = static_cast<uint16_t>(str.size());
     file.write(reinterpret_cast<const char*>(&len), sizeof(len));
     file.write(str.data(), len);
@@ -32,11 +41,19 @@ uint64_t ReadVarUInt(std::istream& file) {
     uint64_t v = 0;
     int shift = 0;
     while (true) {
-        unsigned char b;
-        file.read(reinterpret_cast<char*>(&b), 1);
+        unsigned char b = 0;
+        if (!file.read(reinterpret_cast<char*>(&b), 1)) {
+            throw std::runtime_error("Truncated variable-length integer");
+        }
+        if (shift == 63 && (b & 0x7e) != 0) {
+            throw std::runtime_error("Variable-length integer overflow");
+        }
         v |= static_cast<uint64_t>(b & 0x7f) << shift;
         if ((b & 0x80) == 0) break;
         shift += 7;
+        if (shift > 63) {
+            throw std::runtime_error("Variable-length integer overflow");
+        }
     }
     return v;
 }
@@ -44,15 +61,21 @@ uint64_t ReadVarUInt(std::istream& file) {
 std::string ReadStr(std::istream& file) {
     uint32_t n;
     char c;
-    file >> n >> c;
+    if (!(file >> n >> c) || c != ':') {
+        throw std::runtime_error("Invalid text string header");
+    }
 
     std::string str(n, '\0');
-    file.read(&str[0], n);
+    if (n != 0 && !file.read(str.data(), n)) {
+        throw std::runtime_error("Truncated text string");
+    }
 
     char comma;
-    file.get(comma);
-    
-    file.get();
+    if (!file.get(comma) || comma != ',') {
+        throw std::runtime_error("Invalid text string terminator");
+    }
+    if (file.peek() == '\r') file.get();
+    if (file.peek() == '\n') file.get();
 
     return str;
 }

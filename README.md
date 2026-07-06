@@ -3,7 +3,7 @@
 Wapic 是一个 C++17 线性链 CRF 序列标注工具，主要用于中文分词。它支持
 SGD-L1 与 L-BFGS/OWL-QN 训练、BMES 解码、批量推理和可选的 Python 绑定。
 
-模型与数据不存放在 Git 仓库中：
+发布模型与大规模训练数据不存放在Git仓库中：
 
 - 模型：[Ismantic/wapic-cws](https://huggingface.co/Ismantic/wapic-cws)
 - 数据：[Ismantic/wapic-cws-data](https://huggingface.co/datasets/Ismantic/wapic-cws-data)
@@ -91,7 +91,8 @@ warm-start 配方见数据集仓库 [Ismantic/wapic-cws-data](https://huggingfac
 除了使用发布模型，你也可以按 [TUTORIAL.md](TUTORIAL.md) 用公开的人民日报 1998
 语料从零训练一个分词模型（1–5 月训练 / 6 月测试，单机约 3 分钟得到 F1≈97.4）。
 涉及脚本：`scripts/convert.py`（PFR→jsonl）、`scripts/prepare.py`（jsonl→BMES）。
+仓库内的PFR语料不适用MIT许可证，详情见 [data/README.md](data/README.md)。
 
 ## License
 
-MIT
+源码采用MIT许可证。`data/PeopleDaily1998.zip` 的版权和使用条件独立于源码许可证。

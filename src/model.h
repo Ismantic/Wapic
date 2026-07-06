@@ -5,6 +5,7 @@
 #include <string>
 #include <fstream>
 #include <algorithm>
+#include <stdexcept>
 
 #include <stdint.h>
 
@@ -43,11 +44,20 @@ public:
 
     void LoadData(const std::string& filename, uint32_t nthread = 1) {
         std::ifstream file(filename);
+        if (!file) {
+            throw std::runtime_error("Cannot open training data: " + filename);
+        }
         data_ = std::unique_ptr<Dataset>(processor_->LoadDataset(file, true, nthread));
+        if (!data_ || data_->sens.empty()) {
+            throw std::runtime_error("Training data contains no sentences: " + filename);
+        }
     }
 
     void LoadDataBinary(const std::string& prefix) {
         data_ = std::unique_ptr<Dataset>(processor_->LoadBinary(prefix));
+        if (!data_ || data_->sens.empty()) {
+            throw std::runtime_error("Cannot load binary training data: " + prefix);
+        }
     }
 
     const DataProcessor* GetDataProcessor() const { return processor_.get(); }

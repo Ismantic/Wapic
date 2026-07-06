@@ -31,13 +31,16 @@ def make_nolabel(gold, out):
 
 def read_gold(path):
     sents, tags = [], []
-    for line in open(path, encoding="utf-8"):
+    for line_number, line in enumerate(open(path, encoding="utf-8"), 1):
         line = line.rstrip("\n")
-        if line == "":
+        if not line.strip():
             if tags:
                 sents.append(tags); tags = []
             continue
-        tags.append(line.split()[-1])
+        tag = line.split()[-1]
+        if tag not in {"B", "M", "E", "S"}:
+            raise ValueError(f"{path}:{line_number}: invalid BMES tag {tag!r}")
+        tags.append(tag)
     if tags:
         sents.append(tags)
     return sents
@@ -47,13 +50,16 @@ def read_pred(path):
     sents, tags = [], []
     for line in open(path, encoding="utf-8"):
         line = line.rstrip("\n")
-        if line == "":
+        if not line.strip():
             if tags:
                 sents.append(tags); tags = []
             continue
         if line.startswith("score="):
             continue
-        tags.append(line.split()[0])
+        tag = line.split()[0]
+        if tag not in {"B", "M", "E", "S"}:
+            raise ValueError(f"{path}: invalid predicted BMES tag {tag!r}")
+        tags.append(tag)
     if tags:
         sents.append(tags)
     return sents
@@ -67,25 +73,48 @@ def spans(tags):
     return res
 
 
-def evaluate(binpath, model, gold):
-    tmp = tempfile.mkdtemp()
-    nolbl, pred = os.path.join(tmp, "in.txt"), os.path.join(tmp, "pred.txt")
-    make_nolabel(gold, nolbl)
-    subprocess.run([binpath, "test", "-m", model, nolbl, pred],
-                   check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    g_sents, p_sents = read_gold(gold), read_pred(pred)
-    os.unlink(nolbl); os.unlink(pred); os.rmdir(tmp)
+def score_sentences(g_sents, p_sents):
+    if not g_sents:
+        raise ValueError("gold contains no sentences")
+    if len(g_sents) != len(p_sents):
+        raise ValueError(
+            f"sentence count mismatch: gold={len(g_sents)}, pred={len(p_sents)}"
+        )
 
     tp = fp = fn = 0
-    for gt, pt in zip(g_sents, p_sents):
+    for index, (gt, pt) in enumerate(zip(g_sents, p_sents), 1):
         if len(gt) != len(pt):
-            continue
-        g, p = spans(gt), spans(pt)
-        tp += len(g & p); fp += len(p - g); fn += len(g - p)
-    P = tp / (tp + fp) if tp + fp else 0.0
-    R = tp / (tp + fn) if tp + fn else 0.0
-    F = 2 * P * R / (P + R) if P + R else 0.0
-    return P * 100, R * 100, F * 100
+            raise ValueError(
+                f"sentence {index} length mismatch: gold={len(gt)}, pred={len(pt)}"
+            )
+        gold_spans, pred_spans = spans(gt), spans(pt)
+        tp += len(gold_spans & pred_spans)
+        fp += len(pred_spans - gold_spans)
+        fn += len(gold_spans - pred_spans)
+
+    precision = tp / (tp + fp) if tp + fp else 0.0
+    recall = tp / (tp + fn) if tp + fn else 0.0
+    f1 = (
+        2 * precision * recall / (precision + recall)
+        if precision + recall
+        else 0.0
+    )
+    return precision * 100, recall * 100, f1 * 100
+
+
+def evaluate(binpath, model, gold):
+    with tempfile.TemporaryDirectory() as tmp:
+        nolbl, pred = os.path.join(tmp, "in.txt"), os.path.join(tmp, "pred.txt")
+        make_nolabel(gold, nolbl)
+        subprocess.run(
+            [binpath, "test", "-m", model, nolbl, pred],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        g_sents, p_sents = read_gold(gold), read_pred(pred)
+
+    return score_sentences(g_sents, p_sents)
 
 
 def main():
@@ -95,6 +124,9 @@ def main():
     ap.add_argument("--data-dir", default=str(ROOT / "data" / "dataset"))
     ap.add_argument("--bin", default=str(ROOT / "build" / "wapic"))
     args = ap.parse_args()
+    if not os.path.isfile(args.bin):
+        print(f"wapic binary not found: {args.bin}", file=sys.stderr)
+        return 1
 
     if args.gold:
         golds = [(Path(g).name, g) for g in args.gold]
@@ -102,16 +134,23 @@ def main():
         golds = [("PD-1998", os.path.join(args.data_dir, "wapic-cws-data-test-2.txt")),
                  ("12M", os.path.join(args.data_dir, "wapic-cws-data-test-1.txt"))]
 
+    missing_golds = [path for _, path in golds if not os.path.isfile(path)]
+    if missing_golds:
+        for path in missing_golds:
+            print(f"Gold file not found: {path}", file=sys.stderr)
+        return 1
+
     for model in args.models:
         if not os.path.isfile(model):
             print(f"Model not found: {model}", file=sys.stderr)
             return 1
         print(f"{os.path.basename(model)}")
         for name, gold in golds:
-            if not os.path.isfile(gold):
-                print(f"  {name:12} gold not found: {gold}", file=sys.stderr)
-                continue
-            P, R, F = evaluate(args.bin, model, gold)
+            try:
+                P, R, F = evaluate(args.bin, model, gold)
+            except (OSError, ValueError, subprocess.CalledProcessError) as exc:
+                print(f"  {name:12} evaluation failed: {exc}", file=sys.stderr)
+                return 1
             print(f"  {name:12} F1={F:.2f}  P={P:.2f}  R={R:.2f}")
     return 0
 

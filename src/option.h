@@ -178,7 +178,7 @@ public:
                     error_msg = "Model output file is required";
                     return false;
                 }
-                if (pattern_file.empty()) {
+                if (pattern_file.empty() && init_from.empty()) {
                     error_msg = "Pattern file is required for training";
                     return false;
                 }

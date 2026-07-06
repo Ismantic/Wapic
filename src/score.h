@@ -15,6 +15,8 @@ class Scorer {
 private:
     const Model* model_;
     std::vector<std::vector<std::vector<float_t>>> psi_; // [t][y'][y]
+    std::vector<float_t> sum_y_;
+    std::vector<float_t> sum_d_;
 
     struct BackData {
         std::vector<std::vector<int64_t>> back;

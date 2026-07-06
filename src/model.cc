@@ -11,6 +11,9 @@ void Model::Sync() {
     int64_t F = 0;
     int64_t Y = label_count_;
     int64_t O = observation_count_;
+    if (Y <= 0 || O <= 0) {
+        throw std::runtime_error("Model has no labels or observations");
+    }
 
     kind_.resize(O);
     uoff_.resize(O);
@@ -18,10 +21,15 @@ void Model::Sync() {
 
     for (int64_t o = 0; o < O; o++) {
         const std::string& obs = processor_->GetObservationStr(o);
+        if (obs.empty()) {
+            throw std::runtime_error("Model contains an empty observation");
+        }
         switch (obs[0]) {
             case 'u': kind_[o] = 1; break;
             case 'b': kind_[o] = 2; break;
             case '*': kind_[o] = 3; break;
+            default:
+                throw std::runtime_error("Model contains an invalid observation");
         }
         if (kind_[o] & 1)
             uoff_[o] = F, F += Y;
@@ -38,6 +46,9 @@ void Model::Sync() {
 
 void Model::Save(const std::string& filename, bool binary, bool prune) const {
     std::ofstream file(filename, binary ? (std::ios::out | std::ios::binary) : std::ios::out);
+    if (!file) {
+        throw std::runtime_error("Cannot open model output: " + filename);
+    }
 
     const int64_t Y = label_count_;
     const int64_t O = observation_count_;
@@ -124,6 +135,10 @@ void Model::Save(const std::string& filename, bool binary, bool prune) const {
             }
         }
     }
+    file.flush();
+    if (!file) {
+        throw std::runtime_error("Failed while writing model: " + filename);
+    }
 }
 
 void Model::BuildDeadMasks() {
@@ -157,6 +172,9 @@ void Model::BuildDeadMasks() {
 
 void Model::Load(const std::string& filename) {
     std::ifstream file(filename, std::ios::in | std::ios::binary);
+    if (!file) {
+        throw std::runtime_error("Cannot open model: " + filename);
+    }
     processor_->LoadFeatures(file);
     Sync();
 
@@ -166,38 +184,63 @@ void Model::Load(const std::string& filename) {
     std::getline(file, line);
     if (line.find("#ModelBin32#") == 0) {
         nact = std::stoll(line.substr(12));
+        if (nact < 0 || nact > feature_count_) {
+            throw std::runtime_error("Invalid model: active feature count out of range");
+        }
         int64_t prev = -1;
         for (int64_t i = 0; i < nact; i++) {
             uint64_t delta = ReadVarUInt(file);
             int64_t f = prev + static_cast<int64_t>(delta);
             float v;
-            file.read(reinterpret_cast<char*>(&v), sizeof(float));
+            if (f < 0 || f >= feature_count_ ||
+                !file.read(reinterpret_cast<char*>(&v), sizeof(float))) {
+                throw std::runtime_error("Invalid model: corrupt fp32 weight entry");
+            }
             theta_[f] = static_cast<double>(v);
             prev = f;
         }
     } else if (line.find("#ModelBin#") == 0) {
         // legacy binary fp64
         nact = std::stoll(line.substr(10));
+        if (nact < 0 || nact > feature_count_) {
+            throw std::runtime_error("Invalid model: active feature count out of range");
+        }
         int64_t prev = -1;
         for (int64_t i = 0; i < nact; i++) {
             uint64_t delta = ReadVarUInt(file);
             int64_t f = prev + static_cast<int64_t>(delta);
             double v;
-            file.read(reinterpret_cast<char*>(&v), sizeof(double));
+            if (f < 0 || f >= feature_count_ ||
+                !file.read(reinterpret_cast<char*>(&v), sizeof(double))) {
+                throw std::runtime_error("Invalid model: corrupt fp64 weight entry");
+            }
             theta_[f] = v;
             prev = f;
         }
-    } else {
+    } else if (line.find("#Model#") == 0) {
         // legacy text format
-        size_t start = line.find("#Model#") + 7;
+        size_t start = 7;
         nact = std::stoll(line.substr(start));
+        if (nact < 0 || nact > feature_count_) {
+            throw std::runtime_error("Invalid model: active feature count out of range");
+        }
         for (int64_t i = 0; i < nact; i++) {
-            std::getline(file, line);
+            if (!std::getline(file, line)) {
+                throw std::runtime_error("Invalid model: truncated text weights");
+            }
             size_t pos = line.find('=');
+            if (pos == std::string::npos) {
+                throw std::runtime_error("Invalid model: malformed text weight");
+            }
             int64_t f = std::stoll(line.substr(0, pos));
+            if (f < 0 || f >= feature_count_) {
+                throw std::runtime_error("Invalid model: weight index out of range");
+            }
             float_t v = std::stod(line.substr(pos+1));
             theta_[f] = v;
         }
+    } else {
+        throw std::runtime_error("Invalid model: missing weight header");
     }
 
     BuildDeadMasks();

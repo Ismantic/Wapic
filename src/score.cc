@@ -30,21 +30,21 @@ void Scorer::ComputeUnigramScores(const Sentence& sen) {
 
     // Loop order n,y so each feature's weight slice is loaded once.
     // sum_y is per-position accumulator across features.
-    float_t sum_y[8] = {0}; // Y up to 8 fits on stack; BMES = 4.
+    sum_y_.resize(static_cast<size_t>(Y));
     for (uint32_t t = 0; t < T; ++t) {
         const Sentence::Pos& pos = sen.pos[t];
         const int32_t* obs = sen.unigram_obs(t);
-        for (int64_t y = 0; y < Y; ++y) sum_y[y] = 0.0;
+        for (int64_t y = 0; y < Y; ++y) sum_y_[y] = 0.0;
         for (uint32_t n = 0; n < pos.unigram_count; ++n) {
             int32_t o = obs[n];
             if (model_->IsUnigramDead(o)) continue;
             const auto w = model_->GetUnigramWeights(o);
-            for (int64_t y = 0; y < Y; ++y) sum_y[y] += w[y];
+            for (int64_t y = 0; y < Y; ++y) sum_y_[y] += w[y];
         }
         // Broadcast: psi_[t][yp][y] = sum_y[y]
         for (int64_t yp = 0; yp < Y; ++yp) {
             auto& row = psi_[t][yp];
-            for (int64_t y = 0; y < Y; ++y) row[y] = sum_y[y];
+            for (int64_t y = 0; y < Y; ++y) row[y] = sum_y_[y];
         }
     }
 }
@@ -54,21 +54,21 @@ void Scorer::ComputeBigramScores(const Sentence& sen) {
     const int64_t Y = model_->LabelCount();
     const size_t YY = static_cast<size_t>(Y) * static_cast<size_t>(Y);
 
-    float_t sum_d[64] = {0}; // Y*Y up to 64; BMES = 16.
+    sum_d_.resize(YY);
     for (uint32_t t = 1; t < T; ++t) {
         const Sentence::Pos& pos = sen.pos[t];
         const int32_t* obs = sen.bigram_obs(t);
-        for (size_t d = 0; d < YY; ++d) sum_d[d] = 0.0;
+        for (size_t d = 0; d < YY; ++d) sum_d_[d] = 0.0;
         for (uint32_t n = 0; n < pos.bigram_count; ++n) {
             int32_t o = obs[n];
             if (model_->IsBigramDead(o)) continue;
             const auto w = model_->GetBigramWeights(o);
-            for (size_t d = 0; d < YY; ++d) sum_d[d] += w[d];
+            for (size_t d = 0; d < YY; ++d) sum_d_[d] += w[d];
         }
         // Add to psi: psi_[t][yp][y] += sum_d[yp*Y+y]
         for (int64_t yp = 0, d = 0; yp < Y; ++yp) {
             auto& row = psi_[t][yp];
-            for (int64_t y = 0; y < Y; ++y, ++d) row[y] += sum_d[d];
+            for (int64_t y = 0; y < Y; ++y, ++d) row[y] += sum_d_[d];
         }
     }
 }

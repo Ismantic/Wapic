@@ -39,6 +39,7 @@ After C++ changes, build from a clean CMake directory and exercise the affected
 CLI mode. For segmentation behavior, run:
 
 ```bash
+python3 -m unittest discover -s tests
 python3 scripts/download.py data
 python3 scripts/test.py data/model/wapic-cws.wac
 ```

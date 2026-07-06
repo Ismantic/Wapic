@@ -61,7 +61,8 @@ void GradientState::ComputePsi(const Sentence& sen) {
 
     // Unigram contribution: per-position score depends only on current label y,
     // so accumulate once per t and broadcast to all yp slots.
-    float_t sumY[16];  // Y <= 16 (BMES = 4 in our case)
+    scratch_y_.resize(static_cast<size_t>(Y));
+    float_t* sumY = scratch_y_.data();
     for (size_t t = 0; t < T; ++t) {
         const Sentence::Pos& pos = sen.pos[t];
         const int32_t* uobs = sen.unigram_obs(t);
@@ -78,7 +79,8 @@ void GradientState::ComputePsi(const Sentence& sen) {
     }
 
     // Bigram contribution: full Y*Y matrix per t.
-    float_t sumYY[256];  // Y*Y <= 256
+    scratch_yy_.resize(static_cast<size_t>(YY));
+    float_t* sumYY = scratch_yy_.data();
     for (size_t t = 1; t < T; ++t) {
         const Sentence::Pos& pos = sen.pos[t];
         const int32_t* bobs = sen.bigram_obs(t);
@@ -160,7 +162,8 @@ void GradientState::ComputeModelExpectation(const Sentence& sen) {
     const int64_t YY = Y * Y;
 
     // Unigram block: precompute e[y] per t, then write contiguous gradient[o..o+Y]
-    float_t eY[16];
+    scratch_y_.resize(static_cast<size_t>(Y));
+    float_t* eY = scratch_y_.data();
     for (uint32_t t = 0; t < T; ++t) {
         const Sentence::Pos& pos = sen.pos[t];
         const int32_t* uobs = sen.unigram_obs(t);
@@ -176,7 +179,8 @@ void GradientState::ComputeModelExpectation(const Sentence& sen) {
     }
 
     // Bigram block: precompute e[d=yp*Y+y] per t, then write contiguous gradient[o..o+YY]
-    float_t eYY[256];
+    scratch_yy_.resize(static_cast<size_t>(YY));
+    float_t* eYY = scratch_yy_.data();
     for (uint32_t t = 1; t < T; ++t) {
         const Sentence::Pos& pos = sen.pos[t];
         const int32_t* bobs = sen.bigram_obs(t);
