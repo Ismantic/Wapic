@@ -47,13 +47,30 @@ python3 scripts/download.py model
 
 ## Python 绑定
 
+pip 安装（会现场编译 C++ 扩展，需 CMake ≥ 3.14 与 C++17 编译器）：
+
+```bash
+pip install git+https://github.com/Ismantic/Wapic.git
+# 或在仓库根目录：pip install .
+```
+
+用法（模型见上面「下载模型」）：
+
+```python
+import wapic
+seg = wapic.Segmenter("data/model/wapic-cws.wac")
+print(seg.cut("中华人民共和国是一个伟大的国家"))
+# ['中华人民共和国', '是', '一个', '伟大', '的', '国家']
+```
+
+开发时也可源码构建后用 `PYTHONPATH` 直接引用：
+
 ```bash
 uv pip install pybind11
 cmake -B build_py -DWAPIC_PYTHON=ON -DCMAKE_BUILD_TYPE=Release \
   -Dpybind11_DIR="$(python3 -m pybind11 --cmakedir)"
 cmake --build build_py
-PYTHONPATH=build_py/python python3 -c \
-  'import wapic; print(wapic.Segmenter("data/model/wapic-cws.wac").cut("中华人民共和国"))'
+PYTHONPATH=build_py/python python3 -c 'import wapic; print(wapic.Segmenter("data/model/wapic-cws.wac").cut("中华人民共和国"))'
 ```
 
 ## 评估

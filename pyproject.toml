@@ -1,0 +1,23 @@
+[build-system]
+requires = ["scikit-build-core>=0.10", "pybind11>=2.12"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "wapic"
+version = "0.1.0"
+description = "C++17 linear-chain CRF Chinese word segmenter"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+keywords = ["chinese-word-segmentation", "crf", "nlp"]
+
+[project.urls]
+Homepage = "https://github.com/Ismantic/Wapic"
+Model = "https://huggingface.co/Ismantic/wapic-cws"
+
+[tool.scikit-build]
+cmake.version = ">=3.14"
+cmake.args = ["-DWAPIC_PYTHON=ON"]
+cmake.build-type = "Release"
+build.targets = ["_core"]
+wheel.license-files = []

@@ -43,4 +43,8 @@ if(WAPIC_PYTHON)
         "${CMAKE_CURRENT_SOURCE_DIR}/python/wapic/__init__.py"
         "${WAPIC_PYTHON_PACKAGE_DIR}/__init__.py"
         COPYONLY)
+    # Install rules so `pip install .` (scikit-build-core) collects the package.
+    install(TARGETS _core LIBRARY DESTINATION wapic)
+    install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/python/wapic/__init__.py"
+            DESTINATION wapic)
 endif()
