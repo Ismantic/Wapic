@@ -42,6 +42,8 @@ CLI mode. For segmentation behavior, run:
 python3 -m unittest discover -s tests
 python3 scripts/download.py data
 python3 scripts/test.py data/model/wapic-cws.wac
+python3 scripts/badcase.py data/model/wapic-cws.wac     # bcv3 name suite, 500 cases
+python3 scripts/name_cases.py data/model/wapic-cws.wac  # 15-sentence name check
 ```
 
 Report both PDMP and 12M F1. The expected release baseline is `98.01` and
