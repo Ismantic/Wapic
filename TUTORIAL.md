@@ -93,7 +93,7 @@ python3 scripts/test.py data/PeopleDaily_model.wac --gold data/PeopleDaily_6.txt
 
 在本教程的 1–5 月训练 / 6 月测试划分下，实测 **F1 = 97.40**（P 97.42 / R 97.38，
 `-i 100 -t 8` 约 3 分钟训完，102,739 句训练 / 21,143 句测试）。这已是很不错的结果；
-发布模型用了约 1400 万句、两阶段 warm-start，才进一步到 97.70/97.48。
+发布模型用了约 1400 万句、两阶段 warm-start，才进一步到 98.00/98.06。
 
 ## 想更进一步
 
