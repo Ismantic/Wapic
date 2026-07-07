@@ -6,8 +6,7 @@
 #include <chrono>
 #include <cstdint>
 #include <cstring>
-#include <deque>
-#include <future>
+#include <thread>
 #include <unordered_map>
 #include <unistd.h>
 #include <fcntl.h>
@@ -132,6 +131,24 @@ TokenStrs* DataProcessor::RawToTokens(const RawStrs* raw, bool e) const {
     return tos;
 }
 
+namespace {
+
+// Route an observation id into the per-position obs slots by its kind
+// ('u' unigram, 'b' bigram, '*' both).
+inline void DispatchObs(char kind, int32_t id, int32_t*& uni, int32_t*& bi,
+                        Sentence::Pos& pos) {
+    switch (kind) {
+        case 'u': *uni++ = id; pos.unigram_count++; break;
+        case 'b': *bi++  = id; pos.bigram_count++;  break;
+        case '*':
+            *uni++ = id; *bi++ = id;
+            pos.unigram_count++; pos.bigram_count++;
+            break;
+    }
+}
+
+}  // namespace
+
 Sentence* DataProcessor::TokensToSentence(const TokenStrs* tos) const {
     Sentence* sen = new Sentence();
     sen->pos.resize(tos->Size());
@@ -154,28 +171,9 @@ Sentence* DataProcessor::TokensToSentence(const TokenStrs* tos) const {
         for (Pattern* pattern : patterns) {
             pattern->Execute(*tos, t, obs);
             int64_t i = observations->Insert(obs); // Lock when in test
-
             if (i == -1) continue;
-
-            switch(obs[0]) {
-                case 'u': {
-                    *unigram_current++ = static_cast<int32_t>(i);
-                    pos.unigram_count++;
-                    break;
-                }
-                case 'b': {
-                    *bigram_current++ = static_cast<int32_t>(i);
-                    pos.bigram_count++;
-                    break;
-                }
-                case '*': {
-                    *unigram_current++ = static_cast<int32_t>(i);
-                    *bigram_current++ = static_cast<int32_t>(i);
-                    pos.unigram_count++;
-                    pos.bigram_count++;
-                    break;
-                }
-            }
+            DispatchObs(obs[0], static_cast<int32_t>(i),
+                        unigram_current, bigram_current, pos);
         }
 
         if (!tos->labels.empty()) {
@@ -298,16 +296,60 @@ Dataset* DataProcessor::LoadDataset(std::istream& file, bool e, uint32_t nthread
     return data;
 }
 
-namespace {
+// Shared batch driver. Reads sentences in batches of 512, tokenizes and runs
+// Pattern::Execute in parallel, then hands each batch's PatternedSentences to
+// `consume` serially and in input order — so trie insertion order (and thus
+// observation ids) is identical to a fully serial pass.
+void DataProcessor::ForEachPatternedBatch(
+        std::istream& file, bool e, uint32_t nthread,
+        const std::function<void(PatternedSentence&)>& consume) {
+    const size_t batch_size = 512;
+    std::vector<RawStrs*> batch;
+    std::vector<PatternedSentence> results;
+    batch.reserve(batch_size);
+    results.reserve(batch_size);
 
-// Per-sentence intermediate result from worker threads.
-struct PatternedSentence {
-    uint32_t T = 0;
-    std::vector<std::string> obs;     // size T * pattern_count, ordered by (t, pattern_idx)
-    std::vector<std::string> labels;  // size T (may be empty if no labels)
-};
+    bool eof = false;
+    while (!eof) {
+        batch.clear();
+        results.clear();
+        while (batch.size() < batch_size && !eof) {
+            RawStrs* raw = ReadRawStrs(file);
+            if (!raw) { eof = true; break; }
+            batch.push_back(raw);
+        }
+        if (batch.empty()) break;
 
-}  // namespace
+        // Parallel phase: no shared mutable state.
+        results.resize(batch.size());
+        const int B = static_cast<int>(batch.size());
+        #pragma omp parallel for schedule(static) num_threads(static_cast<int>(std::max(1u, nthread)))
+        for (int i = 0; i < B; i++) {
+            TokenStrs* tos = RawToTokens(batch[i], e);
+            delete batch[i];
+            batch[i] = nullptr;
+            if (!tos || tos->Size() == 0) { delete tos; continue; }
+            PatternedSentence& ps = results[i];
+            ps.T = tos->Size();
+            ps.obs.reserve(ps.T * patterns.size());
+            if (!tos->labels.empty()) ps.labels.reserve(ps.T);
+            std::string obs;  // reused across patterns/positions
+            for (uint32_t t = 0; t < ps.T; t++) {
+                for (Pattern* p : patterns) {
+                    p->Execute(*tos, t, obs);
+                    ps.obs.push_back(obs);
+                }
+                if (!tos->labels.empty()) ps.labels.push_back(tos->labels[t]);
+            }
+            delete tos;
+        }
+
+        // Serial phase, in input order.
+        for (auto& ps : results) {
+            if (ps.T != 0) consume(ps);
+        }
+    }
+}
 
 // Parse text once and write 3 sidecar files (obs.bin, meta.bin, trie.txt) so
 // future training runs can mmap them in seconds instead of reparsing.
@@ -320,55 +362,18 @@ void DataProcessor::BuildBinary(std::istream& file, const std::string& prefix,
 
     // Pass 0 (only with min_count > 1): stream the corpus once counting how
     // often each observation string occurs, so the main pass can drop the
-    // rare ones. Parallel feature extraction, serial counting.
+    // rare ones.
     std::unordered_map<std::string, uint32_t> obs_freq;
     if (min_count > 1) {
-        const size_t batch_size = 512;
-        std::vector<RawStrs*> batch;
-        std::vector<PatternedSentence> results;
         uint64_t counted = 0;
-        bool eof = false;
-        while (!eof) {
-            for (auto* r : batch) delete r;
-            batch.clear();
-            results.clear();
-            while (batch.size() < batch_size && !eof) {
-                RawStrs* raw = ReadRawStrs(file);
-                if (!raw) { eof = true; break; }
-                batch.push_back(raw);
-            }
-            if (batch.empty()) break;
-            results.resize(batch.size());
-            const int B = static_cast<int>(batch.size());
-            #pragma omp parallel for schedule(static) num_threads(static_cast<int>(std::max(1u, nthread)))
-            for (int i = 0; i < B; i++) {
-                RawStrs* raw = batch[i];
-                TokenStrs* tos = RawToTokens(raw, true);
-                delete raw;
-                batch[i] = nullptr;
-                if (!tos || tos->Size() == 0) { delete tos; continue; }
-                PatternedSentence& ps = results[i];
-                ps.T = tos->Size();
-                ps.obs.reserve(ps.T * patterns.size());
-                std::string obs;
-                for (uint32_t t = 0; t < ps.T; t++) {
-                    for (Pattern* p : patterns) {
-                        p->Execute(*tos, t, obs);
-                        ps.obs.push_back(obs);
-                    }
-                }
-                delete tos;
-            }
-            for (auto& ps : results) {
-                for (auto& s : ps.obs) obs_freq[std::move(s)]++;
-                counted += ps.T;
-            }
-            if ((counted / 1000000) != ((counted - 40960) / 1000000)) {
+        ForEachPatternedBatch(file, true, nthread, [&](PatternedSentence& ps) {
+            for (auto& obs : ps.obs) obs_freq[std::move(obs)]++;
+            counted += ps.T;
+            if ((counted / 1000000) != ((counted - ps.T) / 1000000)) {
                 std::cerr << "count: " << counted << " positions, "
                           << obs_freq.size() << " unique obs\r";
             }
-        }
-        for (auto* r : batch) delete r;
+        });
         std::cerr << "\nmin-count pass: " << obs_freq.size()
                   << " unique observations counted\n";
         file.clear();
@@ -396,9 +401,7 @@ void DataProcessor::BuildBinary(std::istream& file, const std::string& prefix,
     uint64_t parsed_lines = 0;
     auto t_start = std::chrono::steady_clock::now();
 
-
-    auto consume_one = [&](PatternedSentence&& ps) {
-        if (ps.T == 0) return;
+    ForEachPatternedBatch(file, true, nthread, [&](PatternedSentence& ps) {
         const uint32_t T = ps.T;
         std::vector<int32_t> sen_obs(T * stride, 0);
         std::vector<Sentence::Pos> sen_pos(T);
@@ -406,11 +409,8 @@ void DataProcessor::BuildBinary(std::istream& file, const std::string& prefix,
         size_t obs_idx = 0;
         for (uint32_t t = 0; t < T; t++) {
             Sentence::Pos& pos = sen_pos[t];
-            int32_t* unigram_start = sen_obs.data() + t * stride;
-            int32_t* bigram_start  = unigram_start + unigram_count;
-            int32_t* unigram_current = unigram_start;
-            int32_t* bigram_current  = bigram_start;
-
+            int32_t* uni = sen_obs.data() + t * stride;
+            int32_t* bi  = uni + unigram_count;
             for (size_t pi = 0; pi < patterns.size(); pi++) {
                 const std::string& obs = ps.obs[obs_idx++];
                 if (min_count > 1) {
@@ -419,22 +419,7 @@ void DataProcessor::BuildBinary(std::istream& file, const std::string& prefix,
                 }
                 int64_t i = observations->Insert(obs);
                 if (i == -1) continue;
-                switch (obs[0]) {
-                    case 'u':
-                        *unigram_current++ = static_cast<int32_t>(i);
-                        pos.unigram_count++;
-                        break;
-                    case 'b':
-                        *bigram_current++ = static_cast<int32_t>(i);
-                        pos.bigram_count++;
-                        break;
-                    case '*':
-                        *unigram_current++ = static_cast<int32_t>(i);
-                        *bigram_current++ = static_cast<int32_t>(i);
-                        pos.unigram_count++;
-                        pos.bigram_count++;
-                        break;
-                }
+                DispatchObs(obs[0], static_cast<int32_t>(i), uni, bi, pos);
             }
             if (!ps.labels.empty()) {
                 pos.label = static_cast<int32_t>(labels->Insert(ps.labels[t]));
@@ -459,58 +444,7 @@ void DataProcessor::BuildBinary(std::istream& file, const std::string& prefix,
                       << static_cast<int64_t>(parsed_lines / std::max(dt, 1e-9))
                       << " sent/s)" << std::endl;
         }
-    };
-
-    // Main loop: read raw sentences only (no tokenize, no parse), then run
-    // RawToTokens + Pattern::Execute in parallel via OpenMP, then serially
-    // Trie-insert + write the results. Main does minimal serial work.
-    const size_t batch_size = 512;
-    std::vector<RawStrs*> batch;
-    batch.reserve(batch_size);
-    std::vector<PatternedSentence> results;
-    results.reserve(batch_size);
-
-    bool eof = false;
-    while (!eof) {
-        // Clean any leftover batch entries from prev iteration (defensive)
-        for (auto* r : batch) delete r;
-        batch.clear();
-        results.clear();
-        while (batch.size() < batch_size && !eof) {
-            RawStrs* raw = ReadRawStrs(file);
-            if (!raw) { eof = true; break; }
-            batch.push_back(raw);
-        }
-        if (batch.empty()) break;
-
-        results.resize(batch.size());
-        const int B = static_cast<int>(batch.size());
-        const int nt = std::max(1u, nthread);
-        #pragma omp parallel for schedule(static) num_threads(nt)
-        for (int i = 0; i < B; i++) {
-            RawStrs* raw = batch[i];
-            TokenStrs* tos = RawToTokens(raw, true);
-            delete raw;
-            batch[i] = nullptr;
-            if (!tos || tos->Size() == 0) {
-                delete tos;
-                continue;
-            }
-            PatternedSentence& ps = results[i];
-            ps.T = tos->Size();
-            ps.obs.reserve(ps.T * patterns.size());
-            if (!tos->labels.empty()) ps.labels.reserve(ps.T);
-            for (uint32_t t = 0; t < ps.T; t++) {
-                for (Pattern* p : patterns) {
-                    ps.obs.push_back(p->Execute(*tos, t));
-                }
-                if (!tos->labels.empty()) ps.labels.push_back(tos->labels[t]);
-            }
-            delete tos;
-        }
-
-        for (auto& ps : results) consume_one(std::move(ps));
-    }
+    });
 
     obs_out.close();
 
@@ -528,104 +462,39 @@ void DataProcessor::BuildBinary(std::istream& file, const std::string& prefix,
               << " GB)" << std::endl;
 }
 
-// From-scratch parallel load (mutable tries). Per batch: parallel RawToTokens
-// + Pattern::Execute (the expensive part), then serial in-order trie inserts.
-// Insertion order — sentence, then position, then pattern — is exactly the
-// serial path's, so observation ids and the resulting model are identical.
+// From-scratch parallel load (mutable tries): parallel feature extraction,
+// serial in-order trie inserts. Ids match the serial path exactly, so any
+// model trained from this dataset is identical.
 void DataProcessor::LoadDatasetUnlocked(std::istream& file, bool e,
                                         uint32_t nthread, Dataset* data) {
     const uint32_t stride = unigram_count + bigram_count;
-    const size_t batch_size = 512;
-    std::vector<RawStrs*> batch;
-    std::vector<PatternedSentence> results;
-    batch.reserve(batch_size);
-    results.reserve(batch_size);
+    ForEachPatternedBatch(file, e, nthread, [&](PatternedSentence& ps) {
+        const uint32_t T = ps.T;
+        Sentence* sen = new Sentence();
+        sen->pos.resize(T);
+        sen->uni_stride = unigram_count;
+        sen->bi_stride = bigram_count;
+        sen->obs_buffer.assign(static_cast<size_t>(T) * stride, 0);
+        int32_t* buf = sen->obs_buffer.data();
 
-    bool eof = false;
-    while (!eof) {
-        for (auto* r : batch) delete r;
-        batch.clear();
-        results.clear();
-        while (batch.size() < batch_size && !eof) {
-            RawStrs* raw = ReadRawStrs(file);
-            if (!raw) { eof = true; break; }
-            batch.push_back(raw);
-        }
-        if (batch.empty()) break;
-
-        // Phase 1: parallel feature extraction (no shared mutable state).
-        results.resize(batch.size());
-        const int B = static_cast<int>(batch.size());
-        #pragma omp parallel for schedule(static) num_threads(static_cast<int>(nthread))
-        for (int i = 0; i < B; i++) {
-            RawStrs* raw = batch[i];
-            TokenStrs* tos = RawToTokens(raw, e);
-            delete raw;
-            batch[i] = nullptr;
-            if (!tos || tos->Size() == 0) {
-                delete tos;
-                continue;
+        size_t obs_idx = 0;
+        for (uint32_t t = 0; t < T; t++) {
+            Sentence::Pos& pos = sen->pos[t];
+            int32_t* uni = buf + static_cast<size_t>(t) * stride;
+            int32_t* bi  = uni + unigram_count;
+            for (size_t pi = 0; pi < patterns.size(); pi++) {
+                const std::string& obs = ps.obs[obs_idx++];
+                int64_t id = observations->Insert(obs);
+                if (id == -1) continue;
+                DispatchObs(obs[0], static_cast<int32_t>(id), uni, bi, pos);
             }
-            PatternedSentence& ps = results[i];
-            ps.T = tos->Size();
-            ps.obs.reserve(ps.T * patterns.size());
-            if (!tos->labels.empty()) ps.labels.reserve(ps.T);
-            std::string obs;  // reused across patterns/positions
-            for (uint32_t t = 0; t < ps.T; t++) {
-                for (Pattern* p : patterns) {
-                    p->Execute(*tos, t, obs);
-                    ps.obs.push_back(obs);
-                }
-                if (!tos->labels.empty()) ps.labels.push_back(tos->labels[t]);
+            if (!ps.labels.empty()) {
+                pos.label = static_cast<int32_t>(labels->Insert(ps.labels[t]));
             }
-            delete tos;
         }
-
-        // Phase 2: serial, in-order inserts + Sentence assembly.
-        for (auto& ps : results) {
-            if (ps.T == 0) continue;
-            const uint32_t T = ps.T;
-            Sentence* sen = new Sentence();
-            sen->pos.resize(T);
-            sen->uni_stride = unigram_count;
-            sen->bi_stride = bigram_count;
-            sen->obs_buffer.assign(static_cast<size_t>(T) * stride, 0);
-            int32_t* buf = sen->obs_buffer.data();
-
-            size_t obs_idx = 0;
-            for (uint32_t t = 0; t < T; t++) {
-                Sentence::Pos& pos = sen->pos[t];
-                int32_t* unigram_current = buf + static_cast<size_t>(t) * stride;
-                int32_t* bigram_current = unigram_current + unigram_count;
-                for (size_t pi = 0; pi < patterns.size(); pi++) {
-                    const std::string& obs = ps.obs[obs_idx++];
-                    int64_t id = observations->Insert(obs);
-                    if (id == -1) continue;
-                    switch (obs[0]) {
-                        case 'u':
-                            *unigram_current++ = static_cast<int32_t>(id);
-                            pos.unigram_count++;
-                            break;
-                        case 'b':
-                            *bigram_current++ = static_cast<int32_t>(id);
-                            pos.bigram_count++;
-                            break;
-                        case '*':
-                            *unigram_current++ = static_cast<int32_t>(id);
-                            *bigram_current++ = static_cast<int32_t>(id);
-                            pos.unigram_count++;
-                            pos.bigram_count++;
-                            break;
-                    }
-                }
-                if (!ps.labels.empty()) {
-                    pos.label = static_cast<int32_t>(labels->Insert(ps.labels[t]));
-                }
-            }
-            data->sens.push_back(sen);
-            data->max_sentence_size = std::max(data->max_sentence_size, T);
-        }
-    }
+        data->sens.push_back(sen);
+        data->max_sentence_size = std::max(data->max_sentence_size, T);
+    });
 }
 
 void DataProcessor::PruneRareObservations(Dataset* data, uint32_t min_count) {

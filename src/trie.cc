@@ -181,117 +181,25 @@ DartArray::SearchResult DartArray::Lookup(const std::string& str) const {
 // ----- Trie methods -------------------------------------------------------
 
 Trie::~Trie() {
-    const uint32_t max = 1024;
-    if (root_) {
-        Node* s[max];
-        uint32_t cnt = 0;
-        s[cnt++] = root_;
-        while (cnt != 0) {
-            Node* n = s[--cnt];
-            if (IsValue(n)) {
-                continue;
-            }
-            s[cnt++] = n->data[0];
-            s[cnt++] = n->data[1];
-            delete n;
-        }
-    }
-    // Value* objects are owned via data_ regardless of whether the Node tree
-    // is still alive (BuildDAT may have freed the inner Node* tree).
     for (auto* v : data_) delete v;
 }
 
 int64_t Trie::Insert(const std::string& value) {
-    // Fast path: when locked & DAT built, lookup via DAT (cache-friendly).
+    // Locked & DAT built: lookup via DAT (cache-friendly, read-only).
     if (is_lock_ && !dat_.Empty()) {
         auto r = dat_.Lookup(value);
         return r.found ? static_cast<int64_t>(r.value) : -1;
     }
 
-    // Mutable-phase fast path: hash index over existing entries. Repeated
-    // observations (the vast majority during data loading) return here without
-    // walking the crit-bit tree.
-    if (!is_lock_) {
-        auto it = index_.find(std::string_view(value));
-        if (it != index_.end()) return it->second;
-    }
-
-    // Handle empty tree case
-    if (data_.empty()) {
-        if (is_lock_) return -1;
-
-        auto v = new Value(value, 0);
-        data_.push_back(v);
-        root_ = ValueToNode(data_.back());
-        index_.emplace(std::string_view(v->value), v->i);
-    }
-
-    // Search down the tree
-    Node* node = root_;
-    while (!IsValue(node)) {
-        const uint8_t c = node->pos < value.length() ? value[node->pos] : 0;
-        const int s = ((c | node->byte) + 1) >> 8;
-        node = node->data[s];
-    }
-
-    // Compare with found value
-    Value* e = NodeToValue(node);
-    const std::string& t = e->value;
-
-    size_t pos = 0;
-    const size_t shared = std::min(value.length(), t.length());
-    for (; pos < shared; pos++) {
-        if (value[pos] != t[pos]) break;
-    }
-
-    uint8_t byte;
-    if (pos < value.length() && pos < t.length()) {
-        byte = value[pos] ^ t[pos];
-    } else if (pos < t.length()) { // v is Prefix of t
-        byte = t[pos];
-    } else if (pos < value.length()) { // t is Prefix of v
-        byte = value[pos];
-    } else { // v == t
-        return e->i;
-    }
-
+    // Mutable phase (or DAT-overflow fallback): hash index over data_.
+    auto it = index_.find(std::string_view(value));
+    if (it != index_.end()) return it->second;
     if (is_lock_) return -1;
 
-    // Find critical bit
-    while (byte & (byte-1)) {
-        byte &= byte -1;
-    }
-    byte ^= 255;
-
-    // Create new Value and internal Node
-    const uint8_t c = t[pos];
-    const int s = ((c | byte) + 1) >> 8;
-
-    auto new_node = new Node();
-    auto new_value = new Value(value, data_.size());
-
-    new_node->pos = pos;
-    new_node->byte = byte;
-    new_node->data[1-s] = ValueToNode(new_value);
-
-    // Insert new node in tree
-    Node** tx = &root_;
-    while (true) {
-        Node* n = *tx;
-        if (IsValue(n) || n->pos > pos) break;
-        if (n->pos == pos && n->byte > byte) break;
-
-        const uint8_t c = n->pos < value.length() ? value[n->pos] : 0;
-        const int s = ((c | n->byte) + 1) >> 8;
-        tx = &n->data[s];
-    }
-
-    new_node->data[s] = *tx;
-    *tx = new_node;
-
-    data_.push_back(new_value);
-    index_.emplace(std::string_view(new_value->value), new_value->i);
-    return new_value->i;
+    auto* v = new Value(value, static_cast<int64_t>(data_.size()));
+    data_.push_back(v);
+    index_.emplace(std::string_view(v->value), v->i);
+    return v->i;
 }
 
 const std::string& Trie::GetValue(int64_t i) const {
@@ -310,11 +218,6 @@ void Trie::SaveBin(std::ostream& file) const {
     for (const auto& v : data_) {
         WriteStrBin(file, v->value);
     }
-}
-
-void Trie::Save(const std::string& filename) const {
-    std::ofstream file(filename);
-    Save(file);
 }
 
 void Trie::Load(std::istream& file) {
@@ -340,9 +243,9 @@ void Trie::LoadAuto(std::istream& file) {
 
     // On the load path every entry is unique and its id is exactly its position
     // in the file (that is how SaveBin/Save emit them, and the weight indices in
-    // the model depend on this order). So we skip building the crit-bit tree —
-    // which would only be thrown away by BuildDAT() at LockObservations() — and
-    // append values directly. This alone halves model load time on large models.
+    // the model depend on this order), so values are appended directly. The
+    // hash index is not built either: loaded tries are locked right after
+    // (Sync -> BuildDAT) and lookups go through the DAT.
     const bool bin = line.rfind("#TrieBin#", 0) == 0;
     const bool text = line.rfind("#Trie#", 0) == 0;
     if (!bin && !text) {
@@ -362,11 +265,6 @@ void Trie::LoadAuto(std::istream& file) {
 }
 
 
-void Trie::Load(const std::string &filename) {
-    std::ifstream file(filename);
-    Load(file);
-}
-
 void Trie::FreeValueStrings() {
     // Inference-only: drop Value objects entirely (strings + structs + ptr vec).
     // After this call, GetValue(i) becomes invalid; only DAT lookup works.
@@ -382,10 +280,6 @@ void Trie::FreeValueStrings() {
 void Trie::BuildDAT() {
     if (!dat_.Empty()) return;  // already built; idempotent
 
-    // Locked from here on: lookups go through the DAT, the training-phase hash
-    // index is no longer needed.
-    std::unordered_map<std::string_view, int64_t>().swap(index_);
-
     // DAT needs the entries sorted by value. Sort an index permutation and hand
     // the builder pointers into data_'s strings rather than copying every string
     // into a temporary (which, on a large model, doubles peak memory for the
@@ -393,7 +287,8 @@ void Trie::BuildDAT() {
     const size_t N = data_.size();
     for (auto* v : data_) {
         if (v->i > INT32_MAX) {
-            // overflow: skip building DAT (fall back to binary trie)
+            // Overflow: skip building the DAT; the hash index (kept alive in
+            // this case) keeps serving lookups.
             return;
         }
     }
@@ -412,22 +307,9 @@ void Trie::BuildDAT() {
     }
     dat_.Build(strs, ids);
 
-    // DAT supersedes the binary tree for lookups. Free its inner Node tree
-    // (data_ Value* are still kept for GetValue(i) inverse lookup).
-    if (root_) {
-        const uint32_t max = 1024;
-        Node* s[max];
-        uint32_t cnt = 0;
-        s[cnt++] = root_;
-        while (cnt != 0) {
-            Node* n = s[--cnt];
-            if (IsValue(n)) continue;  // Value*: kept (still pointed by data_)
-            s[cnt++] = n->data[0];
-            s[cnt++] = n->data[1];
-            delete n;
-        }
-        root_ = nullptr;
-    }
+    // The DAT supersedes the hash index; free it (data_ Value* are kept for
+    // GetValue(i) inverse lookup and for saving).
+    std::unordered_map<std::string_view, int64_t>().swap(index_);
 }
 
 } // namespace wati

@@ -1,4 +1,6 @@
-#pragma once 
+#pragma once
+
+#include <functional>
 
 #include "sentence.h"
 #include "pattern.h"
@@ -15,9 +17,24 @@ private:
     uint32_t unigram_count;
     uint32_t bigram_count;
 
+    // Per-sentence intermediate from the parallel feature-extraction phase.
+    struct PatternedSentence {
+        uint32_t T = 0;
+        std::vector<std::string> obs;     // T * pattern_count, ordered (t, pattern)
+        std::vector<std::string> labels;  // T (empty when e == false)
+    };
+
     TokenStrs* RawToTokens(const RawStrs* raw, bool e) const;
     Sentence* TokensToSentence(const TokenStrs* tos) const;
     Sentence* GetSentence(std::istream& file, bool e) const;
+
+    // Shared batch driver: read sentences in batches, run RawToTokens +
+    // Pattern::Execute in parallel, then hand each batch's results to
+    // `consume` serially and in input order. Used by the from-scratch loader
+    // and both BuildBinary passes.
+    void ForEachPatternedBatch(std::istream& file, bool e, uint32_t nthread,
+                               const std::function<void(PatternedSentence&)>& consume);
+
     // From-scratch parallel load: parallel feature extraction, serial in-order
     // trie inserts. Produces the same dataset/ids as the serial path.
     void LoadDatasetUnlocked(std::istream& file, bool e, uint32_t nthread,

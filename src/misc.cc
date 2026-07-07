@@ -106,12 +106,5 @@ std::string TrimLine(const std::string& line) {
     return line.substr(start, end - start + 1);
 }
 
-std::string GetLine(std::istream& file) {
-    std::string line;
-    if (!std::getline(file, line)) {
-        return "";
-    }
-    return TrimLine(line);
-}
 
 } // namespace wati

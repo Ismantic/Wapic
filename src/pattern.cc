@@ -1,7 +1,6 @@
 #include "pattern.h"
 
 #include <algorithm>
-#include <stdexcept>
 
 namespace wati {
 

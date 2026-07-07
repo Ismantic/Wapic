@@ -77,14 +77,13 @@ public:
     bool Empty() const { return size_ == 0; }
 };
 
+// String -> dense id map with two lookup structures for its two lifetimes:
+// while mutable (training/building), a hash index over the stored strings;
+// once locked, a double-array trie (DAT) built from the sorted entries.
+// Ids are assignment order (data_ position) — the save format and the model's
+// weight layout depend on that order.
 class Trie {
 private:
-    struct Node {
-        Node* data[2];
-        uint32_t pos;
-        uint8_t byte;
-    };
-
     struct Value {
         int64_t i;
         std::string value;
@@ -93,27 +92,15 @@ private:
         Value(std::string&& v, int64_t i) : i(i), value(std::move(v)) {}
     };
 
-    static Node* ValueToNode(Value* v) {
-        return reinterpret_cast<Node*>(reinterpret_cast<uintptr_t>(v)|1);
-    }
-    static Value* NodeToValue(Node* n) {
-        return reinterpret_cast<Value*>(reinterpret_cast<uintptr_t>(n) & ~1);
-    }
-    static bool IsValue(Node* n) {
-        return reinterpret_cast<uintptr_t>(n) & 1;
-    }
-
-    Node* root_ = nullptr;
     std::vector<Value*> data_;
     bool is_lock_;
 
-    // Inference accelerator (only built when locked & SyncDAT() called).
+    // Inference accelerator (built when locked; supersedes index_).
     DartArray dat_;
 
-    // Training accelerator: string -> id hash index over data_'s stored strings
-    // (string_view keys point into Value::value, which is heap-stable). Insert
-    // consults it before walking the crit-bit tree — the tree walk dominates
-    // from-scratch data loading otherwise. Freed once the trie is locked.
+    // Mutable-phase index: string -> id over data_'s stored strings
+    // (string_view keys point into Value::value, which is heap-stable).
+    // Freed once the DAT is built.
     std::unordered_map<std::string_view, int64_t> index_;
 
 public:

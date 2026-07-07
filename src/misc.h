@@ -21,6 +21,5 @@ uint64_t ReadVarUInt(std::istream& file);
 
 std::vector<std::string> SplitLine(const std::string& line);
 std::string TrimLine(const std::string& line);
-std::string GetLine(std::istream& file);
 
 } // namespace wati
