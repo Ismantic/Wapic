@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build -j"$(nproc)"
+
+      - name: Unit tests
+        env:
+          WAPIC_BIN: ${{ github.workspace }}/build/wapic
+        run: python3 -m unittest discover -s tests -v
+
+      - name: Tutorial smoke (data pipeline + a tiny training run)
+        run: |
+          unzip -j data/PeopleDaily1998.zip '199801/199801.txt' '199801/199806.txt' -d data/
+          python3 scripts/convert.py          # train = 199801, test = 199806
+          python3 scripts/prepare.py
+          ./build/wapic fit -p data/pattern.txt -a l-bfgs -i 2 -t 2 \
+            --save-binary data/PeopleDaily_1-1.txt /tmp/smoke.wac
+          printf '中华人民共和国成立了\n' | ./build/wapic -m /tmp/smoke.wac
