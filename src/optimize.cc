@@ -51,7 +51,7 @@ void SGDOptimizer::Optimize() {
     std::mt19937 G(R());
 
     float_t total_penality = 0.0;
-    auto gradient_state = std::make_unique<GradientState>(model_, gradient);
+    auto gradient_state = std::make_unique<GradientState<float_t>>(model_, gradient);
 
     int64_t num_labels = model_->LabelCount();
 
@@ -285,8 +285,8 @@ void LBFGSOptimizer::UpdateHistory(uint32_t k) {
     // Update s_k = x_{k+1} - x_k
     #pragma omp parallel for schedule(static)
     for (int64_t f = 0; f < F; f++) {
-        s[kn][f] = x[f] - xp[f];
-        y[kn][f] = g[f] - gp[f];
+        s[kn][f] = static_cast<float>(x[f] - xp[f]);
+        y[kn][f] = static_cast<float>(g[f] - gp[f]);
     }
     p[kn] = 1.0/DotProduct(y[kn], s[kn]);
 }
@@ -313,24 +313,5 @@ bool LBFGSOptimizer::CheckConvergence(uint32_t k, float_t fx) {
 }
 
 // Helper functions for vector operations (parallelized for large F)
-float_t LBFGSOptimizer::DotProduct(const std::vector<float_t>& a, const std::vector<float_t>& b) {
-    float_t sum = 0.0;
-    #pragma omp parallel for reduction(+:sum) schedule(static)
-    for (int64_t i = 0; i < F; i++) {
-        sum += a[i] * b[i];
-    }
-    return sum;
-}
-
-void LBFGSOptimizer::Axpy(float_t alpha, const std::vector<float_t>& x, std::vector<float_t>& y) {
-    #pragma omp parallel for schedule(static)
-    for (int64_t i = 0; i < F; i++) {
-        y[i] += alpha * x[i];
-    }
-}
-
-float_t LBFGSOptimizer::VectorNorm(const std::vector<float_t>& v) {
-    return sqrt(DotProduct(v, v));
-}
 
 } // namespace wati

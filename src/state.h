@@ -17,9 +17,14 @@
 
 namespace wati {
 
+// GradT is the gradient-accumulator element type. The optimizer's shared
+// gradient stays double; per-thread scratch copies in GradientComputer use
+// float, halving their memory (T x F x 8 -> x 4) and the reduce traffic.
+// All internal forward-backward state stays double.
+template <typename GradT>
 class GradientState {
 public:
-    GradientState(const Model* model, std::vector<float_t>& gradient)
+    GradientState(const Model* model, std::vector<GradT>& gradient)
         : model_(model)
         , gradient_(gradient)
         , logloss_(0.0)
@@ -36,11 +41,11 @@ public:
     void Compute(const Sentence& sen);
     void ResetLoss() { logloss_ = 0.0; }
     float_t GetLoss() { return logloss_; }
-    float_t* GetGradients() { return gradient_.data(); }
+    GradT* GetGradients() { return gradient_.data(); }
 
 private:
     const Model* model_;
-    std::vector<float_t>& gradient_;
+    std::vector<GradT>& gradient_;
 
     float_t logloss_;
     uint32_t size_;
@@ -92,8 +97,8 @@ public:
         partial_n1_.resize(nthread_, 0.0);
         partial_n2_.resize(nthread_, 0.0);
         for (uint32_t w = 0; w < nthread_; w++) {
-            local_grads_[w].resize(model->FeatureCount(), 0.0);
-            states_.push_back(std::make_unique<GradientState>(model, local_grads_[w]));
+            local_grads_[w].resize(model->FeatureCount(), 0.0f);
+            states_.push_back(std::make_unique<GradientState<float>>(model, local_grads_[w]));
         }
 
         for (uint32_t w = 1; w < nthread_; w++)
@@ -174,8 +179,8 @@ private:
     const Model* model_;
     std::vector<float_t>& gradient_;
     uint32_t nthread_;
-    std::vector<std::vector<float_t>> local_grads_;
-    std::vector<std::unique_ptr<GradientState>> states_;
+    std::vector<std::vector<float>> local_grads_;
+    std::vector<std::unique_ptr<GradientState<float>>> states_;
     std::vector<float_t> partial_n1_;
     std::vector<float_t> partial_n2_;
 

@@ -23,7 +23,8 @@ float_t NormalizeVector(float_t* v, uint32_t size) {
     return scale;
 }
 
-void GradientState::Compute(const Sentence& sen) {
+template <typename GradT>
+void GradientState<GradT>::Compute(const Sentence& sen) {
     CheckSize(sen.Size());
     SetBoundary(0, sen.Size()-1);
     ComputePsi(sen);
@@ -33,7 +34,8 @@ void GradientState::Compute(const Sentence& sen) {
     ComputeLogLoss(sen);
 }
 
-void GradientState::CheckSize(uint32_t size) {
+template <typename GradT>
+void GradientState<GradT>::CheckSize(uint32_t size) {
     if (size == 0 || size <= size_) {
         return;
     }
@@ -54,7 +56,8 @@ void GradientState::CheckSize(uint32_t size) {
 }
 
 // 势函数：ψ_t(y', y, x) = exp(Σ λ_k f_k(y', y, x, t))
-void GradientState::ComputePsi(const Sentence& sen) {
+template <typename GradT>
+void GradientState<GradT>::ComputePsi(const Sentence& sen) {
     const size_t T = sen.Size();
     const int64_t Y = model_->LabelCount();
     const int64_t YY = Y * Y;
@@ -98,7 +101,8 @@ void GradientState::ComputePsi(const Sentence& sen) {
     }
 }
 
-void GradientState::ComputeFowardBackward(const Sentence& sen) {
+template <typename GradT>
+void GradientState<GradT>::ComputeFowardBackward(const Sentence& sen) {
     const size_t T = sen.Size();
     const int64_t Y = model_->LabelCount();
 
@@ -156,7 +160,8 @@ void GradientState::ComputeFowardBackward(const Sentence& sen) {
 }
 
 
-void GradientState::ComputeModelExpectation(const Sentence& sen) {
+template <typename GradT>
+void GradientState<GradT>::ComputeModelExpectation(const Sentence& sen) {
     const size_t T = sen.Size();
     const int64_t Y = model_->LabelCount();
     const int64_t YY = Y * Y;
@@ -173,7 +178,7 @@ void GradientState::ComputeModelExpectation(const Sentence& sen) {
         }
         for (uint32_t n = 0; n < pos.unigram_count; ++n) {
             const int64_t o = model_->GetUnigramIndex(uobs[n]);
-            float_t* g = gradient_.data() + o;
+            GradT* g = gradient_.data() + o;
             for (int64_t y = 0; y < Y; ++y) g[y] += eY[y];
         }
     }
@@ -194,14 +199,15 @@ void GradientState::ComputeModelExpectation(const Sentence& sen) {
         }
         for (uint32_t n = 0; n < pos.bigram_count; ++n) {
             const int64_t o = model_->GetBigramIndex(bobs[n]);
-            float_t* g = gradient_.data() + o;
+            GradT* g = gradient_.data() + o;
             for (int64_t d = 0; d < YY; ++d) g[d] += eYY[d];
         }
     }
 }
 
 
-void GradientState::SubtractEmpirical(const Sentence& sen) {
+template <typename GradT>
+void GradientState<GradT>::SubtractEmpirical(const Sentence& sen) {
     const size_t T = sen.Size();
     const int64_t Y = model_->LabelCount();
 
@@ -229,7 +235,8 @@ void GradientState::SubtractEmpirical(const Sentence& sen) {
 }
 
 
-void GradientState::ComputeLogLoss(const Sentence& sen) {
+template <typename GradT>
+void GradientState<GradT>::ComputeLogLoss(const Sentence& sen) {
     const size_t T = sen.Size();
     const int64_t Y = model_->LabelCount();
 
@@ -268,5 +275,10 @@ void GradientState::ComputeLogLoss(const Sentence& sen) {
 
     logloss_ += logz - pathscore;
 }
+
+// Explicit instantiations: float for GradientComputer's per-thread scratch
+// gradients, double for the SGD path's shared gradient.
+template class GradientState<float>;
+template class GradientState<double>;
 
 } // namespace wati

@@ -98,8 +98,11 @@ private:
     std::vector<float_t>  gp; // Previous gradient
     std::vector<float_t>  pg; // Pseudo-Gradient (for OWL-QN)
     std::vector<float_t>  d;  // Search Direction
-    std::vector<std::vector<float_t>> s; // History of Δx
-    std::vector<std::vector<float_t>> y; // History of Δg
+    // L-BFGS history pairs stored as float: the quasi-Newton approximation is
+    // tolerant of reduced precision, and this halves the 2*M*F history memory
+    // (dot products still accumulate in double).
+    std::vector<std::vector<float>> s; // History of Δx
+    std::vector<std::vector<float>> y; // History of Δg
     std::vector<float_t> p; // ρ values
     std::vector<float_t> fh; // Function value history
 
@@ -113,8 +116,8 @@ private:
             pg.resize(F);
         }
 
-        s.resize(M, std::vector<float_t>(F));
-        y.resize(M, std::vector<float_t>(F));
+        s.resize(M, std::vector<float>(F));
+        y.resize(M, std::vector<float>(F));
         p.resize(M);
         fh.resize(C);
     }
@@ -139,11 +142,30 @@ private:
 
     bool CheckConvergence(uint32_t k, float_t fx);
 
-    float_t DotProduct(const std::vector<float_t>& a, const std::vector<float_t>& b);
+    // Mixed-precision vector helpers: accept float or double vectors, always
+    // accumulate in double.
+    template <class VA, class VB>
+    float_t DotProduct(const VA& a, const VB& b) {
+        float_t sum = 0.0;
+        #pragma omp parallel for reduction(+:sum) schedule(static)
+        for (int64_t i = 0; i < F; i++) {
+            sum += static_cast<float_t>(a[i]) * static_cast<float_t>(b[i]);
+        }
+        return sum;
+    }
 
-    void Axpy(float_t alpha, const std::vector<float_t>& x, std::vector<float_t>& y);
+    template <class VX>
+    void Axpy(float_t alpha, const VX& src, std::vector<float_t>& dst) {
+        #pragma omp parallel for schedule(static)
+        for (int64_t i = 0; i < F; i++) {
+            dst[i] += alpha * static_cast<float_t>(src[i]);
+        }
+    }
 
-    float_t VectorNorm(const std::vector<float_t>& v);
+    template <class V>
+    float_t VectorNorm(const V& v) {
+        return sqrt(DotProduct(v, v));
+    }
 
 };
 
