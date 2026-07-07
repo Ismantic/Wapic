@@ -44,8 +44,8 @@ python3 scripts/download.py data
 python3 scripts/test.py data/model/wapic-cws.wac
 ```
 
-Report both PDMP and 12M F1. The expected release baseline is `98.00` and
-`98.06`.
+Report both PDMP and 12M F1. The expected release baseline is `98.01` and
+`97.95` (decontaminated test sets).
 
 ## Commits and Pull Requests
 
