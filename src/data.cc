@@ -8,6 +8,7 @@
 #include <cstring>
 #include <deque>
 #include <future>
+#include <unordered_map>
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/mman.h>
@@ -312,10 +313,67 @@ struct PatternedSentence {
 // future training runs can mmap them in seconds instead of reparsing.
 // With nthread>1, Pattern::Execute runs in parallel; Trie::Insert stays serial.
 void DataProcessor::BuildBinary(std::istream& file, const std::string& prefix,
-                                uint32_t nthread) {
+                                uint32_t nthread, uint32_t min_count) {
     const std::string obs_path  = prefix + ".obs.bin";
     const std::string meta_path = prefix + ".meta.bin";
     const std::string trie_path = prefix + ".trie.txt";
+
+    // Pass 0 (only with min_count > 1): stream the corpus once counting how
+    // often each observation string occurs, so the main pass can drop the
+    // rare ones. Parallel feature extraction, serial counting.
+    std::unordered_map<std::string, uint32_t> obs_freq;
+    if (min_count > 1) {
+        const size_t batch_size = 512;
+        std::vector<RawStrs*> batch;
+        std::vector<PatternedSentence> results;
+        uint64_t counted = 0;
+        bool eof = false;
+        while (!eof) {
+            for (auto* r : batch) delete r;
+            batch.clear();
+            results.clear();
+            while (batch.size() < batch_size && !eof) {
+                RawStrs* raw = ReadRawStrs(file);
+                if (!raw) { eof = true; break; }
+                batch.push_back(raw);
+            }
+            if (batch.empty()) break;
+            results.resize(batch.size());
+            const int B = static_cast<int>(batch.size());
+            #pragma omp parallel for schedule(static) num_threads(static_cast<int>(std::max(1u, nthread)))
+            for (int i = 0; i < B; i++) {
+                RawStrs* raw = batch[i];
+                TokenStrs* tos = RawToTokens(raw, true);
+                delete raw;
+                batch[i] = nullptr;
+                if (!tos || tos->Size() == 0) { delete tos; continue; }
+                PatternedSentence& ps = results[i];
+                ps.T = tos->Size();
+                ps.obs.reserve(ps.T * patterns.size());
+                std::string obs;
+                for (uint32_t t = 0; t < ps.T; t++) {
+                    for (Pattern* p : patterns) {
+                        p->Execute(*tos, t, obs);
+                        ps.obs.push_back(obs);
+                    }
+                }
+                delete tos;
+            }
+            for (auto& ps : results) {
+                for (auto& s : ps.obs) obs_freq[std::move(s)]++;
+                counted += ps.T;
+            }
+            if ((counted / 1000000) != ((counted - 40960) / 1000000)) {
+                std::cerr << "count: " << counted << " positions, "
+                          << obs_freq.size() << " unique obs\r";
+            }
+        }
+        for (auto* r : batch) delete r;
+        std::cerr << "\nmin-count pass: " << obs_freq.size()
+                  << " unique observations counted\n";
+        file.clear();
+        file.seekg(0);
+    }
 
     std::ofstream obs_out(obs_path, std::ios::binary);
     std::ofstream meta_out(meta_path, std::ios::binary);
@@ -355,6 +413,10 @@ void DataProcessor::BuildBinary(std::istream& file, const std::string& prefix,
 
             for (size_t pi = 0; pi < patterns.size(); pi++) {
                 const std::string& obs = ps.obs[obs_idx++];
+                if (min_count > 1) {
+                    auto it = obs_freq.find(obs);
+                    if (it == obs_freq.end() || it->second < min_count) continue;
+                }
                 int64_t i = observations->Insert(obs);
                 if (i == -1) continue;
                 switch (obs[0]) {
@@ -564,6 +626,69 @@ void DataProcessor::LoadDatasetUnlocked(std::istream& file, bool e,
             data->max_sentence_size = std::max(data->max_sentence_size, T);
         }
     }
+}
+
+void DataProcessor::PruneRareObservations(Dataset* data, uint32_t min_count) {
+    if (data->obs_mmap != nullptr) {
+        throw std::runtime_error("--min-count cannot rewrite an mmap'd binary cache");
+    }
+    const int64_t O = static_cast<int64_t>(observations->Size());
+
+    // Count occurrences (a '*' observation is counted from both lists; only
+    // its total matters for the threshold).
+    std::vector<uint32_t> cnt(O, 0);
+    for (Sentence* sen : data->sens) {
+        for (uint32_t t = 0; t < sen->Size(); t++) {
+            const Sentence::Pos& pos = sen->pos[t];
+            const int32_t* u = sen->unigram_obs(t);
+            for (uint16_t n = 0; n < pos.unigram_count; n++) cnt[u[n]]++;
+            const int32_t* b = sen->bigram_obs(t);
+            for (uint16_t n = 0; n < pos.bigram_count; n++) cnt[b[n]]++;
+        }
+    }
+
+    // Rebuild the trie with survivors in original insertion order, so the kept
+    // ids stay dense and ordered; remap[old] = new id or -1.
+    Trie* kept = new Trie();
+    std::vector<int32_t> remap(O, -1);
+    for (int64_t i = 0; i < O; i++) {
+        if (cnt[i] >= min_count) {
+            remap[i] = static_cast<int32_t>(kept->Insert(observations->GetValue(i)));
+        }
+    }
+    const int64_t K = static_cast<int64_t>(kept->Size());
+    delete observations;
+    observations = kept;
+
+    // Rewrite sentences in place: compact surviving ids, zero the tail.
+    for (Sentence* sen : data->sens) {
+        int32_t* buf = sen->obs_buffer.data();
+        const uint32_t stride = sen->uni_stride + sen->bi_stride;
+        for (uint32_t t = 0; t < sen->Size(); t++) {
+            Sentence::Pos& pos = sen->pos[t];
+            int32_t* u = buf + static_cast<size_t>(t) * stride;
+            uint16_t w = 0;
+            for (uint16_t n = 0; n < pos.unigram_count; n++) {
+                int32_t nid = remap[u[n]];
+                if (nid >= 0) u[w++] = nid;
+            }
+            for (uint16_t n = w; n < pos.unigram_count; n++) u[n] = 0;
+            pos.unigram_count = w;
+
+            int32_t* b = u + sen->uni_stride;
+            w = 0;
+            for (uint16_t n = 0; n < pos.bigram_count; n++) {
+                int32_t nid = remap[b[n]];
+                if (nid >= 0) b[w++] = nid;
+            }
+            for (uint16_t n = w; n < pos.bigram_count; n++) b[n] = 0;
+            pos.bigram_count = w;
+        }
+    }
+
+    std::cerr << "min-count " << min_count << ": kept " << K << "/" << O
+              << " observations ("
+              << (O ? static_cast<int>(100.0 * K / O) : 0) << "%)" << std::endl;
 }
 
 Dataset* DataProcessor::LoadBinary(const std::string& prefix) {

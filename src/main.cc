@@ -31,7 +31,8 @@ int main(int argc, char* argv[]) {
                 std::cerr << "Cannot open input " << option.input_file << "\n";
                 return 1;
             }
-            processor.BuildBinary(in, option.output_file, option.nthread);
+            processor.BuildBinary(in, option.output_file, option.nthread,
+                                  option.min_count);
             break;
         }
         case wati::RunMode::CONVERT: {
@@ -76,6 +77,9 @@ int main(int argc, char* argv[]) {
                 // the fully parallel path; from-scratch (unlocked) parallelizes
                 // feature extraction and keeps trie inserts serial + in-order.
                 model.LoadData(option.input_file, option.nthread);
+            }
+            if (option.min_count > 1) {
+                model.PruneRareFeatures(option.min_count);
             }
             model.Sync();
 

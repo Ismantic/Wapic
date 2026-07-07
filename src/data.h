@@ -40,9 +40,18 @@ public:
     // Binary cache pipeline: parse text once, write 3 files (<prefix>.obs.bin /
     // <prefix>.meta.bin / <prefix>.trie.txt). Later runs mmap them for fast load.
     // nthread > 1 enables parallel pattern execution; trie insert stays serial.
+    // min_count > 1 makes it two-pass: count observation frequencies first,
+    // then drop observations seen fewer than min_count times from the cache —
+    // the way to apply --min-count to trainings that use --from-bin.
     void BuildBinary(std::istream& file, const std::string& prefix,
-                     uint32_t nthread = 1);
+                     uint32_t nthread = 1, uint32_t min_count = 1);
     Dataset* LoadBinary(const std::string& prefix);
+
+    // Drop observations occurring fewer than min_count times in `data`:
+    // rebuilds the observation trie with the survivors (original order kept)
+    // and rewrites every sentence's obs ids in place. Must run before Sync().
+    // Not usable with mmap-backed datasets (read-only obs).
+    void PruneRareObservations(Dataset* data, uint32_t min_count);
 
     void LoadFeatures(std::istream& file);
     // If obs_alive != nullptr, only writes observations marked true (n_alive count).

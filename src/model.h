@@ -60,6 +60,12 @@ public:
         }
     }
 
+    // Drop observations seen < min_count times (call after LoadData, before
+    // Sync). Shrinks the feature space — and with it every F-sized buffer.
+    void PruneRareFeatures(uint32_t min_count) {
+        processor_->PruneRareObservations(data_.get(), min_count);
+    }
+
     const DataProcessor* GetDataProcessor() const { return processor_.get(); }
     const Dataset* GetData() const { return data_.get(); }
 

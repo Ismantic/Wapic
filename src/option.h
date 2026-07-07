@@ -85,6 +85,7 @@ public:
     bool save_binary = false;  // fit: save model in compact binary format
     bool save_prune = false;   // fit: drop dead observations on save
     float_t prune_threshold = 0.0;  // fit: zero out |theta_f| < this before save
+    uint32_t min_count = 1;    // fit: drop observations seen fewer than N times
     std::string init_from;     // fit: warm-start from this model (lock tries, continue L-BFGS)
 
     uint32_t max_iterations;
@@ -184,6 +185,16 @@ public:
                 }
                 if (!model_file.empty()) {
                     error_msg = "Training resume via --model is not implemented";
+                    return false;
+                }
+                if (min_count > 1 && from_binary) {
+                    error_msg = "--min-count cannot rewrite an mmap'd binary cache; "
+                                "apply it at cache time: wapic build --min-count";
+                    return false;
+                }
+                if (min_count > 1 && !init_from.empty()) {
+                    error_msg = "--min-count is incompatible with --init-from "
+                                "(features are fixed by the loaded model)";
                     return false;
                 }
                 break;
@@ -307,6 +318,7 @@ public:
             
             "L-BFGS OPTIONS:\n"
             "    --histsz INT            History size (default: 5)\n"
+            "    --min-count INT         Drop observations seen < N times (default: 1)\n"
             "    --maxls INT             Max line search (default: 40)\n\n"
             
             "TEST MODE:\n"
@@ -503,6 +515,13 @@ private:
                         return false;
                     }
                     option.prune_threshold = std::stod(argv[i]);
+                }
+                else if (arg == "--min-count") {
+                    if (++i >= argc) {
+                        error_msg = "Missing min-count argument";
+                        return false;
+                    }
+                    option.min_count = std::stoul(argv[i]);
                 }
                 else if (arg == "--init-from") {
                     if (++i >= argc) {
