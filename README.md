@@ -93,6 +93,11 @@ warm-start 配方见数据集仓库 [Ismantic/wapic-cws-data](https://huggingfac
 涉及脚本：`scripts/convert.py`（PFR→jsonl）、`scripts/prepare.py`（jsonl→BMES）。
 仓库内的PFR语料不适用MIT许可证，详情见 [data/README.md](data/README.md)。
 
+## 原理文档
+
+CRF、前向后向算法、梯度计算以及 L-BFGS/OWL-QN 的原理讲解见《底层实现：文本处理》的
+[中文分词：高级篇](https://ismantic.github.io/text/wapic.html)。
+
 ## License
 
 源码采用MIT许可证。`data/PeopleDaily1998.zip` 的版权和使用条件独立于源码许可证。
