@@ -86,14 +86,14 @@ python3 scripts/test.py data/model/wapic-cws.wac
 发布模型在 PDMP/12M retag2 测试集（已去污染）上的 F1 为98.01/97.95。完整训练数据与两阶段
 warm-start 配方见数据集仓库 [Ismantic/wapic-cws-data](https://huggingface.co/datasets/Ismantic/wapic-cws-data)。
 
-## 训练自己的模型
+## 训练
 
-除了使用发布模型，你也可以按 [TUTORIAL.md](TUTORIAL.md) 用公开的人民日报 1998
+除了使用发布模型，也可以按 [TUTORIAL.md](TUTORIAL.md) 用公开的人民日报 1998
 语料从零训练一个分词模型（1–5 月训练 / 6 月测试，单机约 3 分钟得到 F1≈97.4）。
 涉及脚本：`scripts/convert.py`（PFR→jsonl）、`scripts/prepare.py`（jsonl→BMES）。
 仓库内的PFR语料不适用MIT许可证，详情见 [data/README.md](data/README.md)。
 
-## 原理文档
+## 文档
 
 CRF、前向后向算法、梯度计算以及 L-BFGS/OWL-QN 的原理讲解见《底层实现：文本处理》的
 [中文分词：高级篇](https://ismantic.github.io/text/wapic.html)。
