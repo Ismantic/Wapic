@@ -14,9 +14,9 @@ import argparse
 import sys
 from pathlib import Path
 
-MODEL_REPO = "Ismantic/wapic-cws"
+MODEL_REPO = "Ismantic/Wapic-CWS"
 MODEL_FILE = "model/wapic-cws.wac"
-DATA_REPO = "Ismantic/wapic-cws-data"
+DATA_REPO = "Ismantic/Wapic-CWS-Data"
 DEFAULT_DIR = Path(__file__).resolve().parents[1] / "data"
 
 

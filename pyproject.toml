@@ -13,7 +13,7 @@ keywords = ["chinese-word-segmentation", "crf", "nlp"]
 
 [project.urls]
 Homepage = "https://github.com/Ismantic/Wapic"
-Model = "https://huggingface.co/Ismantic/wapic-cws"
+Model = "https://huggingface.co/Ismantic/Wapic-CWS"
 
 [tool.scikit-build]
 cmake.version = ">=3.14"

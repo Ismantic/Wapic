@@ -1,6 +1,6 @@
 # 教程：用人民日报语料训练自己的中文分词模型
 
-除了发布的 SOTA 模型（[Ismantic/wapic-cws](https://huggingface.co/Ismantic/wapic-cws)），
+除了发布的 SOTA 模型（[Ismantic/Wapic-CWS](https://huggingface.co/Ismantic/Wapic-CWS)），
 本仓库也提供一条**从零训练**的完整链路。本教程用公开的**人民日报 1998 语料**
 （北大/富士通标注，PFR 格式）训练一个 CRF 分词模型：1–5 月做训练集、6 月做测试集。
 
@@ -100,6 +100,6 @@ python3 scripts/test.py data/PeopleDaily_model.wac --gold data/PeopleDaily_6.txt
 - **换更大数据**：把更多语料转成同样的 `{source, cut}` jsonl，再走 `prepare.py`。
 - **两阶段 warm-start**：先训一个 base，再 `--init-from base.wac` 在精修集上继续，
   最后 `convert --save-prune` 剪枝。发布模型的完整配方见数据集仓库
-  [Ismantic/wapic-cws-data](https://huggingface.co/datasets/Ismantic/wapic-cws-data)。
+  [Ismantic/Wapic-CWS-Data](https://huggingface.co/datasets/Ismantic/Wapic-CWS-Data)。
 - **保持口径一致**：训练数据务必用 PreSegment 口径（本教程的 `convert.py` 已保证），
   否则和推理对不齐。字符类型规则见 `convert.py` 的 `classify()`（与 `src/preprocess.cc` 对齐）。
