@@ -45,7 +45,7 @@ python3 scripts/download.py model
 
 输入文件每行一个字符，空行分句。
 
-## Python 绑定
+## Python
 
 pip 安装（会现场编译 C++ 扩展，需 CMake ≥ 3.14 与 C++17 编译器）：
 
