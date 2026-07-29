@@ -49,7 +49,7 @@ custom = wapic.Segmenter("/path/to/custom.wac")
 [Ismantic/Wapic-CWS](https://huggingface.co/Ismantic/Wapic-CWS)，并通过独立的
 [`wapic-cws-model`](https://pypi.org/project/wapic-cws-model/) 包发布。
 
-## CLI 与源码构建
+## 构建
 
 训练和命令行推理需要从源码构建。请使用 Release 模式，训练和推理性能依赖编译器优化：
 
