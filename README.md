@@ -1,5 +1,7 @@
 # Wapic
 
+[English](README_EN.md) | 中文
+
 [![PyPI](https://img.shields.io/pypi/v/wapic)](https://pypi.org/project/wapic/)
 [![Python](https://img.shields.io/pypi/pyversions/wapic)](https://pypi.org/project/wapic/)
 [![CI](https://github.com/Ismantic/Wapic/actions/workflows/ci.yml/badge.svg)](https://github.com/Ismantic/Wapic/actions/workflows/ci.yml)
