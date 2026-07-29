@@ -1,6 +1,9 @@
 # Build outputs
 /build*/
 /cmake-build-*/
+build/
+dist/
+*.egg-info/
 *.a
 *.o
 *.so
@@ -17,6 +20,7 @@ __pycache__/
 !/data/badcase_eval_v3.jsonl
 !/data/README.md
 /hf_upload/
+/packages/wapic-cws-model/src/wapic_model/data/*.wac
 
 # Historical experiments and logs
 /experiments/

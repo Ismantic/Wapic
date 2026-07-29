@@ -131,6 +131,21 @@ class PythonApiTests(unittest.TestCase):
             [self.segmenter.segment(text) for text in texts],
         )
 
+    @unittest.skipUnless(
+        importlib.util.find_spec("wapic_model"),
+        "wapic-cws-model is not installed",
+    )
+    def test_default_model(self):
+        import wapic
+        import wapic_model
+
+        self.assertEqual(
+            wapic.Segmenter().segment("中华人民共和国"),
+            wapic.Segmenter(wapic_model.model_path()).segment(
+                "中华人民共和国"
+            ),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

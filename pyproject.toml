@@ -8,8 +8,19 @@ version = "0.1.0"
 description = "C++17 linear-chain CRF Chinese word segmenter"
 readme = "README.md"
 requires-python = ">=3.9"
-license = { text = "MIT" }
+license = "MIT"
+authors = [{ name = "Ismantic" }]
 keywords = ["chinese-word-segmentation", "crf", "nlp"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: C++",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Text Processing :: Linguistic",
+]
+dependencies = ["wapic-cws-model==0.1.0"]
 
 [project.urls]
 Homepage = "https://github.com/Ismantic/Wapic"
@@ -20,4 +31,19 @@ cmake.version = ">=3.14"
 cmake.args = ["-DWAPIC_PYTHON=ON"]
 cmake.build-type = "Release"
 build.targets = ["_core"]
-wheel.license-files = []
+wheel.license-files = ["LICENSE"]
+
+[tool.cibuildwheel]
+build = "cp39-* cp310-* cp311-* cp312-* cp313-* cp314-*"
+skip = "*-musllinux_*"
+build-verbosity = 1
+
+[tool.cibuildwheel.linux]
+archs = ["x86_64"]
+
+[tool.cibuildwheel.macos]
+archs = ["x86_64", "arm64"]
+before-all = "brew install libomp"
+
+[tool.cibuildwheel.windows]
+archs = ["AMD64"]
