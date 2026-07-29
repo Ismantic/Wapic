@@ -664,8 +664,9 @@ Dataset* DataProcessor::LoadBinary(const std::string& prefix) {
         data->max_sentence_size = std::max(data->max_sentence_size, pos_count);
     }
 
-    std::cerr << "LoadBinary: " << sentence_count << " sentences mmap'd from "
-              << obs_path << " (" << (sb.st_size / (1<<30)) << " GB)" << std::endl;
+    std::cerr << "LoadBinary: " << sentence_count << " sentences loaded from "
+              << obs_path << " (" << (data->obs_mmap_size / (1ULL << 30))
+              << " GB)" << std::endl;
     return data;
 }
 

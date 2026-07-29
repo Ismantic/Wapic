@@ -30,7 +30,14 @@ if(APPLE)
             /opt/homebrew/opt/libomp/lib
             /usr/local/opt/libomp/lib
         REQUIRED)
+    find_path(LIBOMP_INCLUDE_DIR
+        NAMES omp.h
+        HINTS
+            /opt/homebrew/opt/libomp/include
+            /usr/local/opt/libomp/include
+        REQUIRED)
     target_compile_options(wapic_lib PUBLIC -Xpreprocessor -fopenmp)
+    target_include_directories(wapic_lib PUBLIC ${LIBOMP_INCLUDE_DIR})
     target_link_libraries(wapic_lib PUBLIC Threads::Threads ${LIBOMP_LIBRARY})
 else()
     find_package(OpenMP REQUIRED)
