@@ -46,8 +46,7 @@ custom = wapic.Segmenter("/path/to/custom.wac")
 ```
 
 完整接口见 [API.md](API.md)。默认模型来自
-[Ismantic/Wapic-CWS](https://huggingface.co/Ismantic/Wapic-CWS)，并通过独立的
-[`wapic-cws-model`](https://pypi.org/project/wapic-cws-model/) 包发布。
+[Ismantic/Wapic-CWS](https://huggingface.co/Ismantic/Wapic-CWS)。
 
 ## 构建
 
