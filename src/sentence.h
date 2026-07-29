@@ -61,6 +61,10 @@ struct Dataset {
     void* obs_mmap = nullptr;
     size_t obs_mmap_size = 0;
     int obs_mmap_fd = -1;
+#ifdef _WIN32
+    // Windows fallback for LoadBinary: own the observation bytes in memory.
+    std::vector<int32_t> obs_storage;
+#endif
 
     ~Dataset();
 

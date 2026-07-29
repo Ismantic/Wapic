@@ -8,10 +8,12 @@
 #include <cstring>
 #include <thread>
 #include <unordered_map>
+#ifndef _WIN32
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
+#endif
 
 #include "misc.h"
 
@@ -21,12 +23,14 @@ Dataset::~Dataset() {
     for (auto sen : sens) {
         delete sen;
     }
+#ifndef _WIN32
     if (obs_mmap != nullptr) {
         munmap(obs_mmap, obs_mmap_size);
     }
     if (obs_mmap_fd >= 0) {
         close(obs_mmap_fd);
     }
+#endif
 }
 
 DataProcessor::DataProcessor() : token_count(0), unigram_count(0), bigram_count(0) {
@@ -575,7 +579,32 @@ Dataset* DataProcessor::LoadBinary(const std::string& prefix) {
     observations->Load(trie_in);
     trie_in.close();
 
-    // mmap obs
+    // mmap obs on POSIX; Windows uses an owned in-memory buffer.
+#ifdef _WIN32
+    std::ifstream obs_in(obs_path, std::ios::binary | std::ios::ate);
+    if (!obs_in) {
+        std::cerr << "LoadBinary: cannot open " << obs_path << "\n";
+        return nullptr;
+    }
+    const std::streamsize obs_size = obs_in.tellg();
+    if (obs_size < 0 || obs_size % sizeof(int32_t) != 0) {
+        std::cerr << "LoadBinary: invalid observation cache size\n";
+        return nullptr;
+    }
+    obs_in.seekg(0);
+    Dataset* data = new Dataset();
+    data->obs_storage.resize(
+        static_cast<size_t>(obs_size) / sizeof(int32_t));
+    if (!obs_in.read(
+            reinterpret_cast<char*>(data->obs_storage.data()), obs_size)) {
+        std::cerr << "LoadBinary: cannot read " << obs_path << "\n";
+        delete data;
+        return nullptr;
+    }
+    data->obs_mmap = data->obs_storage.data();
+    data->obs_mmap_size = static_cast<size_t>(obs_size);
+    const int32_t* obs_base = data->obs_storage.data();
+#else
     int fd = open(obs_path.c_str(), O_RDONLY);
     if (fd < 0) {
         std::cerr << "LoadBinary: cannot open " << obs_path << "\n";
@@ -600,6 +629,7 @@ Dataset* DataProcessor::LoadBinary(const std::string& prefix) {
     data->obs_mmap_size = sb.st_size;
     data->obs_mmap_fd = fd;
     const int32_t* obs_base = reinterpret_cast<const int32_t*>(mmap_base);
+#endif
 
     // Read meta
     std::ifstream meta_in(meta_path, std::ios::binary);
