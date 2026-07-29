@@ -5,8 +5,9 @@
 [![CI](https://github.com/Ismantic/Wapic/actions/workflows/ci.yml/badge.svg)](https://github.com/Ismantic/Wapic/actions/workflows/ci.yml)
 [![License](https://img.shields.io/github/license/Ismantic/Wapic)](LICENSE)
 
-Wapic 是一个 C++17 线性链 CRF 中文分词工具，支持 SGD-L1 与
-L-BFGS/OWL-QN 训练、BMES 解码、批量推理和 Python API。
+Wapic 是对 [Wapiti](https://github.com/Jekub/Wapiti) 的 C++17 重构实现，
+面向中文分词提供线性链 CRF、SGD-L1 与 L-BFGS/OWL-QN 训练、BMES 解码、
+批量推理和 Python API。
 
 ## 快速开始
 
@@ -112,7 +113,18 @@ Warm-Start 配方见数据集仓库 [Ismantic/Wapic-CWS-Data](https://huggingfac
 CRF、前向后向算法、梯度计算以及 L-BFGS/OWL-QN 的原理讲解见《底层实现：文本处理》的
 [中文分词：高级篇](https://ismantic.github.io/text/wapic.html)。
 
+## 说明
+
+Wapic 源自 Thomas Lavergne 等人开发的
+[Wapiti](https://github.com/Jekub/Wapiti) 线性链 CRF 工具，并在其核心设计基础上
+进行了现代 C++17 重构及中文分词、批量推理和 Python 包装等扩展。Wapic 由本项目
+独立维护，并非 Wapiti 的官方后续版本。
+
+使用本项目开展研究时，也请参考 Wapiti 的原始论文：Thomas Lavergne, Olivier Cappé
+and François Yvon, *Practical Very Large Scale CRFs*, ACL 2010。
+
 ## License
 
 源码与发布模型采用 MIT 许可证。`data/PeopleDaily1998.zip` 的版权和使用条件独立于
-源码许可证。
+源码许可证。Wapiti 的原始版权归 CNRS（2009–2013）所有，并遵循其
+[BSD 许可证](https://github.com/Jekub/Wapiti/blob/master/COPYING)。
