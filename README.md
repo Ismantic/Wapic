@@ -98,7 +98,7 @@ python3 scripts/download.py data          # 添加 --full 下载完整训练集
 python3 scripts/test.py data/model/wapic-cws.wac
 ```
 
-发布模型在 PDMP 和 12M 去污染测试集上的 F1 分别为 98.01 和 97.95。完整训练数据与两阶段
+发布模型在 Peopeley 和 自建测试集上的 F1 分别为 98.01 和 97.95。完整训练数据与两阶段
 warm-start 配方见数据集仓库 [Ismantic/Wapic-CWS-Data](https://huggingface.co/datasets/Ismantic/Wapic-CWS-Data)。
 
 ## 训练
