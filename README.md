@@ -8,7 +8,7 @@
 [![License](https://img.shields.io/github/license/Ismantic/Wapic)](LICENSE)
 
 Wapic 是对 [Wapiti](https://github.com/Jekub/Wapiti) 的 C++17 重构实现，
-面向中文分词提供线性链 CRF、SGD-L1 与 L-BFGS/OWL-QN 训练、BMES 解码、
+面向序列标注任务提供线性链 CRF、SGD-L1 与 L-BFGS/OWL-QN 训练、BMES 解码、
 批量推理和 Python API。
 
 ## 快速开始
@@ -23,6 +23,7 @@ pip install wapic
 ```python
 import wapic
 
+# 使用附带中文分词模型
 segmenter = wapic.Segmenter()
 print(segmenter.segment("中华人民共和国成立了"))
 # ['中华人民共和国', '成立', '了']
