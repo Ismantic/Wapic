@@ -9,7 +9,7 @@
 
 Wapic 是对 [Wapiti](https://github.com/Jekub/Wapiti) 的 C++17 重构实现，
 面向序列标注任务提供线性链 CRF、SGD-L1 与 L-BFGS/OWL-QN 训练、BMES 解码、
-批量推理和 Python API。
+批量推理和 Python API。本仓库带有一个中文分词CRF模型。
 
 ## 快速开始
 
